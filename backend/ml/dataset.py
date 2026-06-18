@@ -7,18 +7,22 @@ from pathlib import Path
 import pandas as pd
 
 from ml.constants import FEATURES, TARGET
+from config import DATASET_PATH as CONFIG_DATASET_PATH
 
-DEFAULT_DATASET = Path(r"J:\F1\f1_cache\parquet-output\f1_model_ready_2018_2025.parquet")
+DEFAULT_DATASET = CONFIG_DATASET_PATH  # Use centralized config (supports .env + STRATBOT_DATASET)
 
 
 def resolve_dataset_path() -> Path:
     env_path = os.environ.get("STRATBOT_DATASET")
-    if env_path and Path(env_path).exists():
-        return Path(env_path)
+    if env_path:
+        p = Path(env_path)
+        if p.exists():
+            return p
     if DEFAULT_DATASET.exists():
         return DEFAULT_DATASET
     raise FileNotFoundError(
-        "Dataset not found. Set STRATBOT_DATASET or place parquet at the default path."
+        "Dataset not found. Set STRATBOT_DATASET (or backend/.env) or ensure parquet at the default J: path. "
+        "See backend/.env.example (the parquet-output folder produced by our pipeline work)."
     )
 
 
