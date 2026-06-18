@@ -1,0 +1,52 @@
+{
+  "model_name": "LightGBM",
+  "target": "LapDelta",
+  "features": [
+    "TyreLife",
+    "Speed_mean",
+    "RPM_mean",
+    "Brake_mean",
+    "Speed_max",
+    "LapNumber",
+    "Stint",
+    "CompoundCode",
+    "DRS_max",
+    "FuelProxy",
+    "DriverDelta"
+  ],
+  "feature_medians": {
+    "TyreLife": 14.0,
+    "Speed_mean": 201.6937966480868,
+    "RPM_mean": 10132.739972844294,
+    "Brake_mean": 0.1988795518207282,
+    "Speed_max": 308.0,
+    "LapNumber": 31.0,
+    "Stint": 2.0,
+    "CompoundCode": 1.0,
+    "DRS_max": 0.0,
+    "FuelProxy": 30.0,
+    "DriverDelta": 0.0
+  },
+  "metrics": {
+    "mae": 0.9683039979294908,
+    "rmse": 1.6259991654664971
+  },
+  "benchmark": {
+    "LightGBM": {
+      "mae": 0.9683039979294908,
+      "rmse": 1.6259991654664971
+    },
+    "XGBoost": {
+      "mae": 1.0186714043088745,
+      "rmse": 1.7293998256885452
+    },
+    "RandomForest": {
+      "mae": 1.0510217847118624,
+      "rmse": 1.8619793937556073
+    }
+  },
+  "holdout_year": 2025,
+  "trained_at": "2026-06-18T22:50:42.995328+00:00",
+  "train_rows": 123763,
+  "test_rows": 17889
+}

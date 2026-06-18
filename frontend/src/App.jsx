@@ -12,6 +12,8 @@ import { StrategyEnginePanel } from './components/StrategyEnginePanel';
 import { TelemetryCharts } from './components/TelemetryCharts';
 import { PostRaceSummary } from './components/PostRaceSummary';
 import { RaceFeed } from './components/RaceFeed';
+import { ModelInsightsPanel } from './components/ModelInsightsPanel';
+import { useStratBotModel } from './hooks/useStratBotModel';
 
 /* App state machine: BOOT → SETUP → RACING → POST_RACE */
 const PHASE = { BOOT: 'boot', SETUP: 'setup', RACING: 'racing', POST_RACE: 'post_race' };
@@ -20,6 +22,15 @@ function App() {
   const [phase, setPhase] = useState(PHASE.BOOT);
   const race = useRaceEngine();
   const sim = useSimulation();
+
+  const trackedDriver = race.drivers.find((d) => d.id === race.trackedDriverId) || race.drivers[0];
+  const stratBot = useStratBotModel({
+    driver: trackedDriver,
+    lap: trackedDriver?.lap ?? 1,
+    totalLaps: race.totalLaps,
+    raceConfig: race.raceConfig,
+    enabled: phase === PHASE.RACING && !race.raceFinished,
+  });
 
   /* ── Phase transitions ── */
   const onBootComplete = useCallback(() => setPhase(PHASE.SETUP), []);
@@ -129,6 +140,14 @@ function App() {
               />
             )}
             <StrategyEnginePanel turn={currentTurn} />
+            <ModelInsightsPanel
+              modelInfo={stratBot.modelInfo}
+              prediction={stratBot.prediction}
+              loading={stratBot.loading}
+              error={stratBot.error}
+              apiOnline={stratBot.apiOnline}
+              onRefresh={stratBot.refreshPrediction}
+            />
             <TelemetryCharts
               telemetryHistory={race.telemetryHistory}
               trackedDriverId={race.trackedDriverId}

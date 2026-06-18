@@ -1,51 +1,70 @@
 """
 StratBot inference API (Flask).
-Serves lap-time predictions from trained model artifacts in backend/data/models.
+Serves LapDelta predictions from the trained LightGBM model.
 """
+import sys
 from pathlib import Path
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
+BACKEND_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(BACKEND_ROOT))
+
+from ml.predictor import LapDeltaPredictor
+
 app = Flask(__name__)
 CORS(app)
 
-MODELS_DIR = Path(__file__).resolve().parent.parent / "data" / "models"
+_predictor = None
+
+
+def get_predictor() -> LapDeltaPredictor:
+    global _predictor
+    if _predictor is None:
+        _predictor = LapDeltaPredictor()
+    return _predictor
 
 
 @app.get("/api/health")
 def health():
-    return jsonify({"status": "ok", "service": "stratbot-api"})
+    ready = (BACKEND_ROOT / "data" / "models" / "lap_delta_model.joblib").exists()
+    return jsonify({"status": "ok", "service": "stratbot-api", "model_ready": ready})
 
 
-@app.get("/api/models")
-def list_models():
-    if not MODELS_DIR.exists():
-        return jsonify({"models": []})
+@app.get("/api/model/info")
+def model_info():
+    try:
+        return jsonify(get_predictor().info())
+    except FileNotFoundError as exc:
+        return jsonify({"error": str(exc), "hint": "Run: python -m ml.train_export"}), 503
 
-    artifacts = sorted(
-        p.name for p in MODELS_DIR.iterdir()
-        if p.suffix in {".pkl", ".joblib", ".json", ".cbm", ".ubj"}
-    )
-    return jsonify({"models": artifacts})
+
+@app.get("/api/model/benchmark")
+def model_benchmark():
+    try:
+        info = get_predictor().info()
+        return jsonify({"benchmark": info.get("benchmark", {}), "winner": info["model_name"]})
+    except FileNotFoundError as exc:
+        return jsonify({"error": str(exc)}), 503
+
+
+@app.post("/api/predict/lap-delta")
+def predict_lap_delta():
+    payload = request.get_json(silent=True) or {}
+    try:
+        result = get_predictor().predict_from_race_state(payload)
+        return jsonify(result)
+    except FileNotFoundError as exc:
+        return jsonify({"error": str(exc)}), 503
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 400
 
 
 @app.post("/api/predict")
-def predict():
-    payload = request.get_json(silent=True) or {}
-    features = payload.get("features")
-
-    if not features:
-        return jsonify({"error": "features array required"}), 400
-
-    # Model loading wired in once training artifacts are finalized.
-    return jsonify({
-        "prediction": None,
-        "metric": "lap_delta",
-        "message": "Connect a trained model artifact to enable live inference.",
-        "feature_count": len(features),
-    })
+def predict_legacy():
+    return predict_lap_delta()
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    app.run(host="127.0.0.1", port=5000, debug=False)

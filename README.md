@@ -38,6 +38,15 @@ python aggregation.py
 
 Processed datasets are written to `backend/data/`. Large files are gitignored.
 
+### Train production model
+
+```bat
+cd backend
+python -m ml.train_export
+```
+
+LightGBM is the production model (MAE 0.9683s on 2025 holdout).
+
 ### API server
 
 ```bat
@@ -45,7 +54,7 @@ cd backend\api
 python app.py
 ```
 
-Runs on `http://127.0.0.1:5000`.
+Runs on `http://127.0.0.1:5000`. Endpoints: `/api/health`, `/api/model/info`, `/api/predict/lap-delta`.
 
 ## Frontend setup
 

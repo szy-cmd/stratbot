@@ -11,6 +11,7 @@ pyarrow
 tqdm
 flask
 flask-cors
+joblib
 torch
 lightning
 pytorch-forecasting
