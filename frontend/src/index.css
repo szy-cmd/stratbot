@@ -1,0 +1,119 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --f1-red: #E10600;
+  --f1-dark: #0a0a0a;
+  --f1-panel: #15151a;
+  --f1-border: #2a2a32;
+  --f1-accent: #00d4aa;
+}
+
+body {
+  @apply bg-f1-dark text-gray-100 antialiased;
+  font-feature-settings: "tnum";
+}
+
+/* Smooth transitions for dashboard elements */
+.dashboard-transition {
+  @apply transition-all duration-300 ease-out;
+}
+
+/* Subtle scanline overlay for broadcast feel */
+.scanlines::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.03) 2px,
+    rgba(0, 0, 0, 0.03) 4px
+  );
+  pointer-events: none;
+}
+
+/* Glow for active elements */
+.glow-accent {
+  box-shadow: 0 0 20px rgba(0, 212, 170, 0.3);
+}
+
+.glow-red {
+  box-shadow: 0 0 20px rgba(225, 6, 0, 0.3);
+}
+
+/* ── Boot sequence ── */
+@keyframes blink-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.cursor-blink::after {
+  content: '█';
+  animation: blink-cursor 0.7s step-end infinite;
+  color: #00d4aa;
+}
+
+@keyframes boot-line-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.boot-line {
+  animation: boot-line-in 0.25s ease-out both;
+}
+
+@keyframes progress-fill {
+  from { width: 0%; }
+  to   { width: 100%; }
+}
+
+/* ── Screen transitions ── */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.5s ease-out both;
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.6s ease-out both;
+}
+.animate-fade-out {
+  animation: fade-out 0.4s ease-in both;
+}
+
+/* Stagger delays for setup cards */
+.stagger-1 { animation-delay: 0.1s; }
+.stagger-2 { animation-delay: 0.2s; }
+.stagger-3 { animation-delay: 0.3s; }
+.stagger-4 { animation-delay: 0.4s; }
+.stagger-5 { animation-delay: 0.5s; }
+
+/* ── Setup screen cards ── */
+.setup-card {
+  @apply rounded-xl border border-f1-border bg-f1-panel/80 p-4 cursor-pointer transition-all duration-200;
+}
+.setup-card:hover {
+  @apply border-gray-500 bg-f1-panel;
+}
+.setup-card.selected {
+  @apply border-f1-accent bg-f1-accent/10 glow-accent;
+}
+
+/* ── HUD grid lines ── */
+.hud-grid {
+  background-image:
+    linear-gradient(rgba(0, 212, 170, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 212, 170, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+}

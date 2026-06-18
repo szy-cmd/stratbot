@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+.env.*
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Data & artifacts (too large for git)
+backend/data/fastf1_cache/
+backend/data/raw/
+backend/data/processed/
+backend/data/output/
+backend/data/models/*.pkl
+backend/data/models/*.joblib
+backend/data/models/*.cbm
+backend/data/models/*.ubj
+*.parquet
+*.csv
+*.7z
+*.zip
+
+# ML run output
+catboost_info/
+lightning_logs/
+checkpoints/
+*.ckpt
+*.png
+
+# IDE / local tooling
+.idea/
+.vscode/
+*.swp
+.aider*
+.cursor/
+terminals/
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Logs
+*.log
+errors.log
+progress.json

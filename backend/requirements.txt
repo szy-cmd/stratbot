@@ -1,0 +1,17 @@
+pandas
+numpy
+matplotlib
+seaborn
+scikit-learn
+catboost
+lightgbm
+xgboost
+fastf1
+pyarrow
+tqdm
+flask
+flask-cors
+torch
+lightning
+pytorch-forecasting
+pytorch-tabnet

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <defs>
+    <linearGradient id="trackFillMonaco" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e1e24"/>
+      <stop offset="100%" stop-color="#121218"/>
+    </linearGradient>
+  </defs>
+  <path id="track-path" fill="none" stroke="none" d="M 40 100 L 80 100 L 80 40 L 160 40 L 160 80 L 240 80 L 240 40 L 280 40 L 280 160 L 240 160 L 240 120 L 160 120 L 160 160 L 80 160 L 80 100 L 40 100 Z"/>
+  <path fill="url(#trackFillMonaco)" stroke="#2a2a32" stroke-width="3" d="M 36 96 L 76 96 L 76 36 L 164 36 L 164 76 L 244 76 L 244 36 L 284 36 L 284 164 L 244 164 L 244 124 L 156 124 L 156 164 L 76 164 L 76 96 L 36 96 Z"/>
+</svg>
