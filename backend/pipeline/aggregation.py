@@ -1,12 +1,15 @@
 import pandas as pd
 import glob
 import os
+import sys
 from tqdm import tqdm
 
-# --- CONFIG ---
-TELE_DIR = r"I:\F1\f1_cache\output\telemetry"
+# --- CONFIG (use shared backend config for local runs; override for historical J:\F1 output) ---
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from config import OUTPUT_DIR
+
+TELE_DIR = os.path.join(OUTPUT_DIR, "telemetry")
 # We save a temporary "checkpoint" file so we don't lose progress
-OUTPUT_DIR = r"I:\F1\f1_cache\output"
 FINAL_TELE_AGG = os.path.join(OUTPUT_DIR, "telemetry_aggregated_master.csv")
 
 telemetry_files = glob.glob(os.path.join(TELE_DIR, "telemetry_*.csv"))

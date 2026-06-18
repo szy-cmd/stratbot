@@ -7,8 +7,8 @@ import os
 import torch
 
 # --- CONFIG ---
-PARQUET_PATH = r"I:\F1\f1_cache\parquet-output\f1_model_ready_2018_2025.parquet"
-SAVE_DIR = r"I:\F1\f1_cache\parquet-output"
+PARQUET_PATH = r"J:\F1\f1_cache\parquet-output\f1_model_ready_2018_2025.parquet"
+SAVE_DIR = r"J:\F1\f1_cache\parquet-output"
 THEME_COLOR = '#E10600'  # F1 Racing Red
 
 # 1. Load and Prepare Data

@@ -1,7 +1,7 @@
 # StratBot — Model Testing & Evaluation
 
 > P80F25 · LapDelta prediction benchmarks  
-> Last updated: 19 June 2026
+> Last updated: 19 June 2026 (paths aligned to J:\F1 parquet-output)
 
 ## 1. Test objective
 

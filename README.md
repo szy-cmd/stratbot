@@ -29,14 +29,27 @@ pip install -r requirements.txt
 
 ### Data pipeline
 
+The full pipeline (as used to produce the final dataset + images in J:\F1\f1_cache\parquet-output) chains:
+
 ```bat
 cd backend\pipeline
 python download_f1_resumable_2018_2025.py
 python weather_extract.py
+python laps_agg.py
 python aggregation.py
+python lap_tel_weather_agg.py
+# (manual or custom clean step -> f1_clean...FINAL.csv)
+python parquet-con-clean-model.py   # produces the f1_model_ready_2018_2025.parquet
+python csv_to_parq.py               # optional: per-race parquet slices
 ```
 
-Processed datasets are written to `backend/data/`. Large files are gitignored.
+Scripts now share `config.py` (local backend/data/output) or point to the canonical J:\F1 work location for the parquet-output folder (final dataset + all eval PNGs). Large files gitignored.
+
+Then train:
+```bat
+cd backend
+python -m ml.train_export
+```
 
 ### Train production model
 

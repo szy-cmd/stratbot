@@ -1,11 +1,14 @@
 import pandas as pd
 import glob
 import os
+import sys
 from tqdm import tqdm
 
-# --- CONFIG ---
-LAPS_DIR = r"I:\F1\f1_cache\output\laps"
-OUTPUT_DIR = r"I:\F1\f1_cache\output"
+# --- CONFIG (use shared backend config for local runs; override for historical J:\F1 output) ---
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from config import OUTPUT_DIR
+
+LAPS_DIR = os.path.join(OUTPUT_DIR, "laps")
 FINAL_LAPS_MASTER = os.path.join(OUTPUT_DIR, "laps_master.csv")
 
 # 1. Gather all lap files

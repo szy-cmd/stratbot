@@ -6,8 +6,8 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 import os
 
 # --- CONFIG ---
-PARQUET_PATH = r"I:\F1\f1_cache\parquet-output\f1_model_ready_2018_2025.parquet"
-SAVE_DIR = r"I:\F1\f1_cache\parquet-output"
+PARQUET_PATH = r"J:\F1\f1_cache\parquet-output\f1_model_ready_2018_2025.parquet"
+SAVE_DIR = r"J:\F1\f1_cache\parquet-output"
 
 # 1. Load and Prepare Data
 print("📂 Loading Data for XGBoost Analysis...")

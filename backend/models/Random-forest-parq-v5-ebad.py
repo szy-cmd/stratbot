@@ -6,7 +6,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 # --- CONFIG ---
-BASE_PATH = r"I:\F1\f1_cache\output"
+BASE_PATH = r"J:\F1\f1_cache\output"
 FILE_NAME = "f1_clean_model_ready_2018_2025_FINAL.csv"
 FILE_PATH = os.path.join(BASE_PATH, FILE_NAME)
 

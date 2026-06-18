@@ -6,7 +6,7 @@ import os
 import time
 
 # --- CONFIG ---
-PARQUET_PATH = r"I:\F1\f1_cache\parquet-output\f1_model_ready_2018_2025.parquet"
+PARQUET_PATH = r"J:\F1\f1_cache\parquet-output\f1_model_ready_2018_2025.parquet"
 THEME_COLOR = '#00529b' 
 
 # 1. Load and Prepare Data

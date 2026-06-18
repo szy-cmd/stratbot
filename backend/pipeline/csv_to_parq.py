@@ -1,19 +1,24 @@
 import os
 import glob
 import time
+import sys
 import pandas as pd
 from tqdm import tqdm
+
+# --- CONFIG (use shared backend config for CSV source in local data/output; parquet slices kept in historical J:\ location) ---
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from config import OUTPUT_DIR
 
 # ============================
 # INPUT (CSV - READ ONLY)
 # ============================
-CSV_LAPS_DIR = r"I:\F1\f1_cache\output\laps"
-CSV_TEL_DIR = r"I:\F1\f1_cache\output\telemetry"
+CSV_LAPS_DIR = os.path.join(OUTPUT_DIR, "laps")
+CSV_TEL_DIR = os.path.join(OUTPUT_DIR, "telemetry")
 
 # ============================
-# OUTPUT (PARQUET)
+# OUTPUT (PARQUET) - the partitioned parquet-output with images etc is at J: (historical work location)
 # ============================
-PARQUET_BASE_DIR = r"I:\F1\f1_cache\parquet-output"
+PARQUET_BASE_DIR = r"J:\F1\f1_cache\parquet-output"
 PARQUET_LAPS_DIR = os.path.join(PARQUET_BASE_DIR, "laps_parquet")
 PARQUET_TEL_DIR = os.path.join(PARQUET_BASE_DIR, "telemetry_parquet")
 

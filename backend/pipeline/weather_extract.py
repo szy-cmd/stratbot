@@ -1,13 +1,20 @@
 import fastf1
 import pandas as pd
 import os
+import sys
 from tqdm import tqdm
 import time
 
+# --- CONFIG ---
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from config import CACHE_DIR, OUTPUT_DIR
+
 # 1. Paths and Cache Setup
-cache_dir = r"I:\F1\f1_cache\fastf1_cache"
-output_dir = r"I:\F1\f1_cache\output"
-output_file = os.path.join(output_dir, "f1_weather_2018_2025.csv")
+cache_dir = str(CACHE_DIR)
+output_dir = str(OUTPUT_DIR)
+weather_subdir = os.path.join(output_dir, "weather")
+os.makedirs(weather_subdir, exist_ok=True)
+output_file = os.path.join(weather_subdir, "f1_weather_2018_2025.csv")
 
 if os.path.exists(cache_dir):
     fastf1.Cache.enable_cache(cache_dir)

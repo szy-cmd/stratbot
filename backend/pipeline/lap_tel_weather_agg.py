@@ -1,8 +1,12 @@
 import pandas as pd
 import os
+import sys
 
-# --- CONFIG ---
-BASE_PATH = r"I:\F1\f1_cache\output"
+# --- CONFIG (use shared backend config for local runs; override for historical J:\F1 output) ---
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from config import OUTPUT_DIR
+
+BASE_PATH = OUTPUT_DIR
 LAPS_MASTER = os.path.join(BASE_PATH, "laps_master.csv")
 TELE_MASTER = os.path.join(BASE_PATH, "telemetry_aggregated_master.csv")
 WEATHER_FILE = os.path.join(BASE_PATH, r"weather\f1_weather_2018_2025.csv")

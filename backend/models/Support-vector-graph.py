@@ -8,8 +8,8 @@ from sklearn.inspection import permutation_importance
 import os
 
 # --- CONFIG ---
-PARQUET_PATH = r"I:\F1\f1_cache\parquet-output\f1_model_ready_2018_2025.parquet"
-SAVE_DIR = r"I:\F1\f1_cache\parquet-output"
+PARQUET_PATH = r"J:\F1\f1_cache\parquet-output\f1_model_ready_2018_2025.parquet"
+SAVE_DIR = r"J:\F1\f1_cache\parquet-output"
 THEME_COLOR = '#008000'  # Racing Green
 
 # 1. Load and Prepare Data

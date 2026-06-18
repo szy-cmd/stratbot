@@ -1,15 +1,21 @@
 import pandas as pd
 import os
+import sys
 
-# --- PATHS ---
-INPUT_FILE = r"I:\F1\f1_cache\output\f1_clean_model_ready_2018_2025_FINAL.csv"
-OUTPUT_DIR = r"I:\F1\f1_cache\parquet-output"
-OUTPUT_FILE = os.path.join(OUTPUT_DIR, "f1_model_ready_2018_2025.parquet")
+# --- CONFIG ---
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from config import OUTPUT_DIR as LOCAL_OUTPUT
+
+# --- PATHS (historical clean csv lives in J: output alongside local OUTPUT; final parq in parquet-output) ---
+# For full local repro, place/generate f1_clean...FINAL.csv under data/output or override INPUT
+INPUT_FILE = r"J:\F1\f1_cache\output\f1_clean_model_ready_2018_2025_FINAL.csv"
+PARQUET_OUTPUT_DIR = r"J:\F1\f1_cache\parquet-output"
+OUTPUT_FILE = os.path.join(PARQUET_OUTPUT_DIR, "f1_model_ready_2018_2025.parquet")
 
 # 1. Create directory if it doesn't exist
-if not os.path.exists(OUTPUT_DIR):
-    os.makedirs(OUTPUT_DIR)
-    print(f"📁 Created folder: {OUTPUT_DIR}")
+if not os.path.exists(PARQUET_OUTPUT_DIR):
+    os.makedirs(PARQUET_OUTPUT_DIR)
+    print(f"📁 Created folder: {PARQUET_OUTPUT_DIR}")
 
 # 2. Load CSV
 print("⏳ Reading CSV (this might take a moment due to file size)...")

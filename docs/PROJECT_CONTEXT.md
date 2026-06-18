@@ -1,7 +1,7 @@
 # StratBot — Project Context
 
 > Internal development reference for P80F25.  
-> Last updated: 19 June 2026
+> Last updated: 19 June 2026 (path sync & pipeline alignment with parquet-output work artifacts)
 
 ## 1. What we are building
 
@@ -136,13 +136,13 @@ stratbot/
 
 | Script | Purpose |
 |--------|---------|
-| `download_f1_resumable_2018_2025.py` | Resumable FastF1 download, laps + telemetry CSV |
-| `weather_extract.py` | Session weather features |
-| `aggregation.py` | Lap-level aggregation |
-| `laps_agg.py` | Lap timing rollups |
-| `lap_tel_weather_agg.py` | Telemetry + weather merge |
-| `csv_to_parq.py` | CSV → Parquet conversion |
-| `parquet-con-clean-model.py` | Final dataset cleanup |
+| `download_f1_resumable_2018_2025.py` | Resumable FastF1 download, laps + telemetry CSV (uses config) |
+| `weather_extract.py` | Session weather features (now writes to weather/ subdir) |
+| `laps_agg.py` | Lap timing rollups to laps_master.csv |
+| `aggregation.py` | Telemetry aggregation (Speed_mean etc) to telemetry_aggregated_master.csv |
+| `lap_tel_weather_agg.py` | Merge laps + tel + weather → unified |
+| `parquet-con-clean-model.py` | Clean unified CSV → f1_model_ready_2018_2025.parquet (in J:\F1 parquet-output) |
+| `csv_to_parq.py` | Bulk CSV → per-race Parquet (laps_parquet / telemetry_parquet under parquet-output) |
 
 ### Legacy ML scripts (models/)
 | Script | Algorithm |
@@ -241,6 +241,8 @@ Open http://127.0.0.1:5173/ → Boot → Setup → Start Race → see ML panel.
 
 | Date | Change | Author |
 |------|--------|--------|
+| 19 Jun 2026 | Synced pipeline + legacy experiment scripts to J:\F1 paths (parquet-output folder); refactored aggs to share config.py | Team |
+| 19 Jun 2026 | Updated docs to reflect full work in J:\F1\f1_cache\parquet-output (dataset + images); re-read SRS/SDS for alignment | Team |
 | 19 Jun 2026 | Combined backend + frontend into `stratbot/` monorepo | Team |
 | 19 Jun 2026 | Added Flask API stub, `config.py`, pipeline path fixes | Team |
 | 19 Jun 2026 | Created this context document | Team |

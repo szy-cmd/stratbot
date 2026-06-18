@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 torch.set_float32_matmul_precision('medium')
 
 # --- 2. LOAD DATA ---
-PARQUET_PATH = r"I:\F1\f1_cache\parquet-output\f1_model_ready_2018_2025.parquet"
+PARQUET_PATH = r"J:\F1\f1_cache\parquet-output\f1_model_ready_2018_2025.parquet"
 df = pd.read_parquet(PARQUET_PATH)
 
 # Feature Engineering
