@@ -72,4 +72,6 @@ Frontend prototype: https://stratbot-fyp.netlify.app
 
 ## Documentation
 
-See `docs/PROJECT_CONTEXT.md` for scope, architecture, and current integration status.
+- `docs/PROJECT_CONTEXT.md` — scope, architecture, integration status
+- `docs/TESTING.md` — model evaluation, MAE benchmarks, graph gallery
+- `docs/evaluation/graphs/` — comparison dashboard PNGs (XGBoost, LightGBM, RF, CatBoost, etc.)

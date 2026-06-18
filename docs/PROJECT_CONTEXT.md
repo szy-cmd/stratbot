@@ -88,7 +88,9 @@ stratbot/
 │   │   └── data/         mockRaceState.js — demo race data
 │   └── vite.config.js    Proxies /api → Flask :5000
 └── docs/
-    └── PROJECT_CONTEXT.md   (this file)
+    ├── PROJECT_CONTEXT.md   (this file)
+    ├── TESTING.md           Model evaluation & API test results
+    └── evaluation/graphs/   MAE comparison dashboards (18 PNGs)
 ```
 
 ## 6. Production ML model
@@ -248,6 +250,13 @@ Open http://127.0.0.1:5173/ → Boot → Setup → Start Race → see ML panel.
 | 19 Jun 2026 | Flask API live: `/api/model/info`, `/api/predict/lap-delta` | Team |
 | 19 Jun 2026 | Added `ModelInsightsPanel` + `useStratBotModel` (non-breaking) | Team |
 | 19 Jun 2026 | Vite proxy configured; local full-stack dev working | Team |
+| 19 Jun 2026 | Added `docs/TESTING.md` + 18 evaluation graphs from parquet-output | Team |
+
+## 15. Testing & evaluation docs
+
+Full model testing write-up: **`docs/TESTING.md`**
+
+Includes train/test protocol (2025 holdout), MAE/RMSE benchmark table, API integration test results, and graph gallery from `docs/evaluation/graphs/` (XGBoost, LightGBM, RF, CatBoost, TabNet, Huber, weather variants, v6 comparison charts).
 
 ---
 
