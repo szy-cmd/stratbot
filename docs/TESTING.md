@@ -104,25 +104,35 @@ curl -X POST http://127.0.0.1:5000/api/predict/lap-delta \
 
 ## 7. Graph gallery
 
-All evaluation images are stored at:
+All evaluation images (including latest regenerated from current 16-feature weather-inclusive models) are stored at:
 
 ```
 docs/evaluation/graphs/
 ```
 
+New "latest_*" graphs use proper values from the most recent retrain (RF winner at MAE 1.0202s), with readable scatter plots (pred vs actual), residual histograms, and feature importance bars.
+
 View on GitHub after push — images render inline in this document and in `PROJECT_CONTEXT.md`.
 
-### Model dashboards
+### Latest Model dashboards (post weather inclusion)
 
-![Latest benchmark (16 features incl. weather data - current RF production winner)](evaluation/graphs/latest_weather_included_benchmark.png)
+![Latest Benchmark Comparison](evaluation/graphs/latest_weather_included_benchmark.png)
 
-![XGBoost dashboard](evaluation/graphs/xgboost_master_dashboard.png)
+![Latest Random Forest (current production winner, 16 feats incl. weather) ](evaluation/graphs/latest_rf_dashboard.png)
 
-![LightGBM dashboard](evaluation/graphs/lgbm_blue_dashboard.png)
+![Latest XGBoost](evaluation/graphs/latest_xgb_dashboard.png)
 
-![Random Forest dashboard](evaluation/graphs/rf_master_dashboard.png)
+![Latest LightGBM](evaluation/graphs/latest_lgbm_dashboard.png)
 
-![CatBoost dashboard](evaluation/graphs/catboost_pink_dashboard.png)
+(Older historical dashboards from pre-weather-inclusion experiments kept below for reference.)
+
+![XGBoost dashboard (historical)](evaluation/graphs/xgboost_master_dashboard.png)
+
+![LightGBM dashboard (historical)](evaluation/graphs/lgbm_blue_dashboard.png)
+
+![Random Forest dashboard (historical)](evaluation/graphs/rf_master_dashboard.png)
+
+![CatBoost dashboard (historical)](evaluation/graphs/catboost_pink_dashboard.png)
 
 ### Comparison charts
 

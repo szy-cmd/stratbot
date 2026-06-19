@@ -113,19 +113,19 @@ We ran both:
 - Still fast enough for live 8s polling.
 - Weather is now *always* used in training (no more "base without weather" -- fulfills the requirement that every model we train incorporates the weather data we collected).
 
-Full details, per-model scripts, and the complete graph gallery live in:
+Full details, per-model scripts, and the complete graph gallery (including freshly remade latest_* dashboards from the current 16-feature weather-inclusive retrain) live in:
 - [docs/TESTING.md](docs/TESTING.md)
-- [docs/evaluation/graphs/](docs/evaluation/graphs/) (18 PNGs — these are the direct visual record of how we compared and decided)
+- [docs/evaluation/graphs/](docs/evaluation/graphs/) (new "latest_" graphs are readable, use exact current MAE/RMSE values, with proper scatter/residuals/importance plots for each model)
 
 Here are key visuals from the model development:
 
-![LightGBM (production winner) dashboard](docs/evaluation/graphs/lgbm_blue_dashboard.png)
+![Latest Random Forest dashboard (current winner with weather data)](docs/evaluation/graphs/latest_rf_dashboard.png)
 
-![XGBoost master dashboard](docs/evaluation/graphs/xgboost_master_dashboard.png)
+![Latest XGBoost dashboard](docs/evaluation/graphs/latest_xgb_dashboard.png)
 
-![Random Forest master dashboard](docs/evaluation/graphs/rf_master_dashboard.png)
+![Latest LightGBM dashboard](docs/evaluation/graphs/latest_lgbm_dashboard.png)
 
-![CatBoost dashboard](docs/evaluation/graphs/catboost_pink_dashboard.png)
+![Latest Benchmark (16 features incl. weather)](docs/evaluation/graphs/latest_weather_included_benchmark.png)
 
 ![Final model battle summary](docs/evaluation/graphs/v6_f1_model_battle_final.png)
 
