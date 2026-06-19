@@ -140,20 +140,20 @@ function classifyNodeName(name) {
   if (!name) return null;
   const n = name.toLowerCase();
 
-  if (n.includes('front_tire')) return { id: 'tyres', label: 'Front Tyres' };
-  if (n.includes('rear_tire')) return { id: 'tyres', label: 'Rear Tyres' };
-  if (n.includes('wheel_rim') || n.includes('wheel_nut') || n.includes('wheel_screw') || n.includes('wheel_cover') || n.includes('tire')) {
+  if (n.includes('front_tire') || n.includes('front_tyre')) return { id: 'tyres', label: 'Front Tyres' };
+  if (n.includes('rear_tire') || n.includes('rear_tyre')) return { id: 'tyres', label: 'Rear Tyres' };
+  if (n.includes('wheel_rim') || n.includes('wheel_nut') || n.includes('wheel_screw') || n.includes('wheel_cover') || n.includes('tire') || n.includes('tyre') || n.includes('pirelli') || n.includes('rubber')) {
     return { id: 'tyres', label: 'Wheels & Tyres' };
   }
-  if (n.includes('front_wing') || n.includes('frontspoiler') || n.includes('frontflap') || n.includes('fw_') || n.includes('fw')) return { id: 'aero', label: 'Front Wing' };
-  if (n.includes('rear_wing') || n.includes('rearspoiler') || n.includes('rearflap')) return { id: 'aero', label: 'Rear Wing' };
-  if (n.includes('drs') || n.includes('windlet')) return { id: 'aero', label: 'Aerodynamics' };
+  if (n.includes('front_wing') || n.includes('frontwing') || n.includes('front_flap') || n.includes('frontflap') || n.includes('front_spoiler') || n.includes('frontspoiler') || n.includes('fw_') || n.includes('fw')) return { id: 'aero', label: 'Front Wing' };
+  if (n.includes('rear_wing') || n.includes('rearwing') || n.includes('rear_flap') || n.includes('rearflap') || n.includes('rear_spoiler') || n.includes('rearspoiler') || n.includes('rwing')) return { id: 'aero', label: 'Rear Wing' };
+  if (n.includes('drs') || n.includes('windlet') || n.includes('drs_puller')) return { id: 'aero', label: 'Aerodynamics' };
   if (n.includes('exhaust') || n.includes('exthaust') || n.includes('rearlight')) return { id: 'power', label: 'Engine / Exhaust' };
   if (n.includes('suspension') || n.includes('carbon_suspension')) return { id: 'suspension', label: 'Suspension' };
   if (n.includes('halo')) return { id: 'halo', label: 'Halo' };
   if (n.includes('headrest') || n.includes('HEADREST')) return { id: 'cockpit', label: 'Cockpit' };
   if (n.includes('mirror')) return { id: 'mirrors', label: 'Mirrors' };
-  if (n.includes('main_body') || n.includes('cam_tbone') || n.includes('Body_Main') || n.includes('paints')) return { id: 'body', label: 'Chassis / Body' };
+  if (n.includes('main_body') || n.includes('cam_tbone') || n.includes('Body_Main') || n.includes('paints') || n.includes('body_main') || n.includes('body_wings') || n.includes('chassis') || n.includes('monocoque')) return { id: 'body', label: 'Chassis / Body' };
 
   return null;
 }
@@ -177,6 +177,9 @@ function resolvePartFromObject(obj) {
       const hit = classifyNodeName(mat?.name);
       if (hit) return hit;
     }
+    // Spatial fallback for bad naming (W14 Cubes, some Red Bull parts)
+    const spatial = getSpatialClassification(obj);
+    if (spatial) return spatial;
   }
 
   return { id: 'unknown', label: 'Unknown Part' };
@@ -189,10 +192,10 @@ function resolvePartGroup(obj) {
   let current = obj;
   while (current) {
     const n = (current.name || '').toLowerCase();
-    if (n.includes('front_tire')) return 'front_tire';
-    if (n.includes('rear_tire')) return 'rear_tire';
-    if (n.includes('front_wing') || n.includes('frontspoiler') || n.includes('frontflap')) return 'front_wing';
-    if (n.includes('rear_wing') || n.includes('rearspoiler')) return 'rear_wing';
+    if (n.includes('front_tire') || n.includes('front_tyre')) return 'front_tire';
+    if (n.includes('rear_tire') || n.includes('rear_tyre')) return 'rear_tire';
+    if (n.includes('front_wing') || n.includes('frontwing') || n.includes('frontspoiler') || n.includes('frontflap') || n.includes('fw_')) return 'front_wing';
+    if (n.includes('rear_wing') || n.includes('rearwing') || n.includes('rearspoiler') || n.includes('rearflap') || n.includes('rwing')) return 'rear_wing';
     if (n.includes('exhaust') || n.includes('exthaust')) return 'exhaust';
     if (n.includes('suspension')) return 'suspension';
     if (n.includes('headrest')) return 'cockpit';
@@ -200,7 +203,65 @@ function resolvePartGroup(obj) {
     current = current.parent;
   }
 
+  // Spatial fallback for group (used for hover highlighting whole front/rear tyres or wings)
+  if (obj?.isMesh) {
+    const spatial = getSpatialClassification(obj);
+    if (spatial && spatial.group) {
+      return spatial.group;
+    }
+    // If spatial gave a category but no specific group, fall back to name resolve which now includes spatial
+  }
+
   return resolvePartFromObject(obj).id;
+}
+
+/**
+ * Spatial fallback classification for models with non-descriptive names (e.g. W14 "Object_" / "Cube_", Red Bull generic).
+ * Uses position in the *normalized* model space (center at 0,0,0 after our normalizeOrientationAndCenter).
+ * Assumes after per-team rotation normalization, length axis is roughly Z, with negative Z = front (tweak isFront sign if reversed).
+ */
+function getSpatialClassification(mesh) {
+  if (!mesh || !mesh.isMesh) return null;
+  const box = new THREE.Box3().setFromObject(mesh);
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const vol = size.x * size.y * size.z;
+
+  // Also check materials for strong clues (pirelli for tyres, wing materials etc.)
+  const mats = Array.isArray(mesh.material) ? mesh.material : (mesh.material ? [mesh.material] : []);
+  const matNames = mats.map(m => (m.name || '').toLowerCase()).join(' ');
+  const hasPirelli = matNames.includes('pirelli');
+  const hasWingMat = matNames.includes('wing') || matNames.includes('flap') || matNames.includes('spoiler') || matNames.includes('carbon');
+  const hasBodyMat = matNames.includes('body') || matNames.includes('paint') || matNames.includes('main') || matNames.includes('chassis');
+
+  // Heuristic forward: negative Z is front (based on viewing dir and McLaren working front/rear).
+  // If after testing with Red Bull / Mercedes you find front/rear swapped (e.g. front tyre click selects rear group),
+  // flip the sign here to: const isFront = center.z > 0;
+  const isFront = center.z < 0;
+  const isRear = center.z > 0;
+
+  // Tyres: small, low, sides, or confirmed by pirelli material
+  if ((size.y < 1.2 && vol < 2 && Math.abs(center.x) > 0.3 && center.y < 0.8) || hasPirelli) {
+    return { id: 'tyres', label: 'Wheels & Tyres', group: isFront ? 'front_tire' : 'rear_tire' };
+  }
+
+  // Wings / aero: thin + large span, or wing material, at front/rear
+  if (((size.y < 0.6 && (size.x > 1.2 || size.z > 1.2) && Math.abs(center.z) > 0.8) || hasWingMat) && Math.abs(center.z) > 0.5) {
+    const group = isFront ? 'front_wing' : 'rear_wing';
+    return { id: 'aero', label: isFront ? 'Front Wing' : 'Rear Wing', group };
+  }
+
+  // Body / chassis: central + volume, or body material
+  if (((Math.abs(center.x) < 1.2 && Math.abs(center.z) < 1.8 && vol > 3 && size.x > 0.8 && size.z > 0.8) || hasBodyMat) && !hasWingMat) {
+    return { id: 'body', label: 'Chassis / Body', group: 'body' };
+  }
+
+  // Exhaust / power: rear small low
+  if (isRear && size.x < 0.7 && size.y < 0.7 && size.z < 0.7 && center.y < 0.5) {
+    return { id: 'power', label: 'Engine / Exhaust', group: 'exhaust' };
+  }
+
+  return null;
 }
 
 /** Stamp every mesh once so clicks/hover don't re-walk the hierarchy */
