@@ -1,0 +1,256 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{hyperref}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{caption}
+
+\graphicspath{{images/}}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{P80F25 STRATBOT --- SRS}
+\fancyhead[R]{DHA Suffa University}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\titleformat{\section}{\large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{1em}{}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{0.5cm}
+
+{\Large \textbf{DHA Suffa University}}\\[0.3cm]
+{\large Department of Computer Science}\\[0.2cm]
+{\large Final Year Project}\\[1.5cm]
+
+{\Huge \textbf{P80F25 STRATBOT}}\\[0.5cm]
+{\Large \textbf{Software Requirements Specifications}}\\[1cm]
+
+\includegraphics[width=0.45\textwidth]{dha_suffa_logo.png}\\[0.8cm]
+
+{\large \textbf{Submitted by}}\\[0.3cm]
+\begin{tabular}{l}
+\textbf{Zaafir Ejaz Ur Rehman Siddiqui} (CS221222) \\
+\textbf{Ebad Ahmed} (CS221217) \\
+\textbf{Fatima Ather Rajput} (CS221270) \\
+\end{tabular}\\[0.8cm]
+
+{\large \textbf{Supervisor}}\\[0.2cm]
+Dr. Huma Jamshed\\[1cm]
+
+{\large \textbf{Document Information}}\\[0.3cm]
+\begin{tabular}{ll}
+Project Title & STRATBOT: AI-Based Formula 1 Race Strategy Simulation \\
+Project Code & P80F25 \\
+Document Name & Software Requirements Specifications \\
+Document Version & 2.0 (Updated) \\
+Document Identifier & P80F25-SRS \\
+Document Status & Final \\
+Author(s) & Zaafir Ejaz, Ebad Ahmed, Fatima Ather Rajput \\
+Approver(s) & Dr. Huma Jamshed \\
+Issue Date & June 2026 \\
+\end{tabular}
+
+\vfill
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+\section{Introduction}
+\subsection{Purpose}
+This document provides a detailed description of the requirements for the StratBot system. It serves as a reference for developers, project managers, instructors, and stakeholders. This updated version (2.0) reflects the completed implementation of FYP-I and key FYP-II features including interactive 3D car customization, ML integration into the live simulation, visible full-race fast completion, and enhanced post-race analysis.
+
+\subsection{Document Conventions}
+\begin{itemize}
+\item \textbf{Shall} indicates a mandatory requirement.
+\item \textbf{Should} indicates a recommended feature.
+\item \textbf{May} indicates an optional feature.
+\end{itemize}
+
+\subsection{Intended Audience}
+\begin{itemize}
+\item Project Supervisor / Instructor
+\item FYP Assessment Panel
+\item Future developers and FYP-II teams
+\item Stakeholders interested in AI for motorsport strategy
+\end{itemize}
+
+\subsection{Product Scope}
+StratBot is an AI-powered Formula 1 race strategy simulation and analysis platform. It assists users (students, F1 fans, or strategy analysts) in understanding, predicting, and simulating race outcomes using real historical data from 2018--2025 (via FastF1 + custom weather pipeline), machine learning models for LapDelta prediction, a turn-based interactive simulation engine, and a modern web dashboard.
+
+\textbf{Key implemented capabilities (as of June 2026):}
+\begin{itemize}
+\item Full data pipeline producing production-ready Parquet dataset with 16 weather-inclusive features.
+\item Production Random Forest model (MAE 1.0202s) serving live predictions via Flask.
+\item React frontend with 3D interactive F1 car customizer (using three.js / @react-three/fiber) for realistic per-driver team setup (compound, initial tyre wear, aero, power levels).
+\item Live ML LapDelta predictions fed into the simulation engine to influence pace, tyre degradation, and fuel.
+\item Custom car stats bias applied in physics and in the ML predictor row.
+\item ``Complete Full'' fast simulation with visible loading overlay (amber panel showing progress) that auto-resolves to detailed Post-Race results including custom car impact analysis and ML comparison table.
+\item Simple token-based auth demo + admin stubs.
+\end{itemize}
+
+The system follows the layered architecture from the original SDS and is fully runnable via the provided launcher using only the approved J: drive venv Python.
+
+\subsection{References}
+[1]--[7] as in original SRS plus current project artifacts (README.md, docs/PROJECT_CONTEXT.md, model\_meta.json, evaluation graphs).
+
+\section{Overall Description}
+\subsection{Product Perspective}
+Web-based (React + Flask) advisory tool. Browser UI for configuration (including 3D customizer), live simulation with ML panel, and post-race analytics. Backend serves predictions; simulation is client-side with optional ML influence.
+
+\subsection{Product Functions (High-Level, Implemented)}
+\begin{itemize}
+\item Pre-race configuration with weather, race type, driver selection, starting compound, model variant, and interactive 3D car setup for the tracked driver.
+\item Launch into turn-based racing with live timing, telemetry charts, race feed, strategy panel, and live ML insights.
+\item ``Complete Full'' one-click fast completion of remaining race (shows prominent loading indicator while advancing in bursts; updates lap/progress visibly).
+\item Post-race: full classification, telemetry graphs, strategy decisions log (including AUTO for fast), custom team car stats impact, ML predictions table + model comparison, weather notes.
+\item ML model experimentation (Base / Weather / RF variants) with MAE values from our training.
+\end{itemize}
+
+\subsection{User Classes and Characteristics}
+\begin{tabular}{|l|p{9cm}|}
+\hline
+\textbf{User Type} & \textbf{Description} \\
+\hline
+Student / Analyst & Uses PreRaceSetup (incl. 3D customizer), runs simulations, views ML predictions and post-race analysis with custom car effects. \\
+\hline
+Admin (demo) & Accesses retrain/refresh stubs after login (student/fyp2026 or admin/stratbot2026). \\
+\hline
+\end{tabular}
+
+\subsection{Operating Environment}
+\begin{itemize}
+\item Frontend: React 18 + Vite + Tailwind + three.js (@react-three/fiber@8 + drei@9)
+\item Backend: Python 3.10 Flask (venv at J:\FYP_Project\.venv)
+\item Data: Parquet (f1\_model\_ready\_2018\_2025.parquet) + joblib model
+\item Launcher: start-stratbot.bat (handles venv, starts both servers)
+\end{itemize}
+
+\subsection{Design and Implementation Constraints}
+\begin{itemize}
+\item Academic timeline and hardware (no live F1 feed).
+\item Must use only approved J: paths and the shared venv Python for all scripts.
+\item 3D requires WebGL-capable browser.
+\item Simulation remains primarily mock-driven (ML is additive influence as per scope).
+\end{itemize}
+
+\section{External Interface Requirements}
+\subsection{User Interfaces}
+\begin{itemize}
+\item Boot sequence (terminal-style system init).
+\item Pre-Race Setup: weather/race/driver/compound/model cards + embedded 3D CarCustomizer (orbit, click-to-cycle parts, sliders for aero/power/tyre, apply team rec).
+\item Racing dashboard: top nav with progress + always-enabled prev/next + Complete Full, LiveTiming, TrackMap, RaceFeed/StrategyPanel, ModelInsightsPanel (live LapDelta), TelemetryCharts.
+\item Fast complete overlay (fixed inset, amber-bordered panel with ``Fast-forwarding full simulation...'', current lap / total, progress bar).
+\item Post-Race: classification table, stats cards, telemetry graphs, strategy log, AI Model Results table + ``Your Team Strategy for X's Car'' box showing compound/aero/power/initial tyre + impact text.
+\end{itemize}
+
+(Actual screenshots captured June 2026 via browser automation are included below and in the SDS GUI section.)
+
+\subsection{Hardware / Software / Communication Interfaces}
+Standard (keyboard/mouse, HTTP/HTTPS to localhost:5000/5173, FastF1 cached data + parquet).
+
+\section{System Features}
+\subsection{Pre-Race Configuration \& 3D Team Strategy (FYP-II)}
+The system shall allow the user (acting as the team for a specific real driver) to select realistic car setup via an interactive 3D F1 model (body, wings, tyres, engine). Changes (aeroLevel, powerLevel, compound, initialTyreWear) shall visually update the model in real time and be propagated to the simulation physics multipliers and the ML predictor feature row.
+
+\subsection{ML-Enhanced Simulation}
+The system shall optionally feed live LapDelta predictions (from the selected model variant + weather) into the RaceEngine to bias lap times. Custom car stats shall additionally scale tire deg, speed, and fuel consumption for the tracked driver only.
+
+\subsection{Fast Full-Race Completion with Visible Indicator}
+The system shall provide a ``Complete Full >>'' control that:
+\begin{itemize}
+\item Immediately displays a prominent, non-black loading overlay with text ``Fast-forwarding full simulation...'', live lap counter, and progress bar.
+\item Advances the race in efficient background bursts (while still updating the overlay lap/progress periodically).
+\item Auto-resolves (no user intervention) to the full Post-Race view.
+\end{itemize}
+
+\subsection{Post-Race Analysis with Custom Car Impact}
+After any race (normal or fast), the system shall display final standings, telemetry, logged decisions (AUTO decisions recorded during fast sim), a dedicated ``Your Team Strategy for [Driver]'s Car'' box with the exact stats chosen in 3D customizer + quantified impact, plus captured ML predictions table and benchmark reminder.
+
+\subsection{Model Experimentation}
+User shall be able to choose Base / RF / XGB variant at setup time; predictions and post-race comparison shall reflect the chosen variant + weather conditions.
+
+\section{Non-Functional Requirements}
+\begin{itemize}
+\item \textbf{Performance}: UI responsive; fast complete of 57-lap race completes in < 3s wall time while showing progress.
+\item \textbf{Usability}: 3D customizer and top progress bar make strategy decisions intuitive.
+\item \textbf{Reliability}: Uses real trained model + deterministic fallbacks; no hard dependency on live internet after initial data.
+\item \textbf{Maintainability}: Code split (engine, hooks, components); pipeline in shared config.py.
+\end{itemize}
+
+\section{Other Requirements \& Appendices}
+\begin{itemize}
+\item All Python execution must use J:\FYP_Project\.venv\Scripts\python.exe
+\item Primary dataset and graphs live at J:\F1\f1\_cache\parquet-output (outside repo)
+\item See stratbot/README.md and docs/TESTING.md for full reproduction and evaluation details.
+\end{itemize}
+
+\newpage
+\section{Appendices -- Key Screenshots \& Graphics (June 2026)}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{ui_prerace_setup_3d.png}
+\caption{Pre-Race Setup screen showing driver selection and the embedded interactive 3D Car Customizer (FYP-II feature for realistic per-driver team strategy).}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{ui_prerace_customizer_applied.png}
+\caption{Pre-Race Setup with team recommendation applied in the 3D customizer. Stats (compound, aero, power, initial wear) are passed to the engine and predictor.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{ui_racing_main.png}
+\caption{Live racing dashboard with top navigation (progress bar, always-enabled controls, ``Complete Full >>''), track map, live timing, and ML insights panel.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{ui_racing_with_turnpanel.png}
+\caption{Racing view with probabilistic Turn/Strategy panel active (user can select branches or let fast sim auto-resolve).}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{ui_fast_overlay.png}
+\caption{The visible ``Fast-forwarding full simulation...'' loading overlay (amber-bordered panel with live lap counter and progress bar). This addresses the requirement that waiting/completion status must be reflected to the user.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{ui_postrace_results.png}
+\caption{Post-Race results screen including final classification, telemetry graphs, strategy decisions (AUTO entries from fast sim), and the ``Your Team Strategy for [Driver]'s Car'' box showing the exact custom stats chosen via 3D + their quantified impact on the simulation and ML predictions.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{latest_rf_dashboard.png}
+\caption{Latest production Random Forest dashboard (winner after weather-inclusive 16-feature retrain, MAE 1.0202s).}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{latest_weather_included_benchmark.png}
+\caption{Benchmark of all three models on the identical 16-feature (weather always included) 2025 holdout split.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.6\textwidth]{dha_suffa_logo.png}
+\caption{DHA Suffa University logo (reused from original signed SRS/SDS title pages).}
+\end{figure}
+
+\end{document}

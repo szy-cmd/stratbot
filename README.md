@@ -25,25 +25,76 @@ DHA Suffa University — Final Year Project
 stratbot\start-stratbot.bat
 ```
 
-The launcher is now more robust (added early debug pauses + venv existence checks) so the window won't just flash open and close.
+The launcher is now more robust and **portable** (works for you + friends with their own downloaded F1 data).
 
 It will:
-- Use the correct shared venv Python
-- Install backend requirements if needed
-- Train the production model automatically if it's missing
+- Try to auto-detect a Python venv (prefers one next to the `stratbot` folder)
+- Use `backend/.env` (if present) to point to *your* parquet dataset via `STRATBOT_DATASET`
+- Install backend requirements if needed (in the detected venv)
 - Open two new command windows (Backend API + Frontend dev server)
 
 Then open **http://localhost:5173** in your browser.
 
 **If the window still closes immediately**, run it from an already-open command prompt like this:
 ```
-cmd /k "J:\FYP_Project\stratbot\start-stratbot.bat"
+cmd /k "stratbot\start-stratbot.bat"
 ```
 This keeps the console open so you can read any errors.
 
 In Setup you can now choose **Model Variant** (Base / Weather-aware / RF), Starting Compound, and Weather — exactly the experimentation features we added.
 
 See the "Easiest way to run everything" section below for more details and what the new Post-Race ML comparison shows.
+
+---
+
+## Sharing / Running on a Friend's Machine (with his own downloaded data)
+
+**Do NOT zip the entire J:\FYP_Project folder** (it contains your local .venv, temp files, and hard-coded paths).
+
+**Best way:**
+
+1. **Zip only the `stratbot/` folder** (this is the clean, git-tracked project).
+
+2. Give your friend the zip + these instructions:
+
+   - Extract `stratbot/` anywhere (e.g. `C:\Users\Friend\Downloads\stratbot\`).
+   - He must have his own `f1_model_ready_2018_2025.parquet` (from his FastF1 downloads + pipeline run, or the one you give him).
+     - Recommended: put it in `C:\F1Data\parquet-output\f1_model_ready_2018_2025.parquet` (or anywhere).
+   - Copy `backend\.env.example` → `backend\.env` (inside the extracted stratbot).
+   - Edit `backend\.env` and set:
+     ```
+     STRATBOT_DATASET=C:\F1Data\parquet-output\f1_model_ready_2018_2025.parquet
+     ```
+   - He also needs the trained model (`lap_delta_model.joblib`). Either:
+     - Copy `backend\data\models\lap_delta_model.joblib` from your machine into his `backend\data\models\`, **or**
+     - He creates a venv and runs the training (see below).
+   - He creates his own Python venv (anywhere is fine, e.g. next to the stratbot folder):
+     ```
+     python -m venv .venv
+     .\.venv\Scripts\pip.exe install -r stratbot\backend\requirements.txt
+     ```
+   - Double-click `stratbot\start-stratbot.bat` (the new portable version will try to find the sibling `.venv` and will read the `STRATBOT_DATASET` from `.env`).
+   - If he wants the evaluation graphs too, give him the whole `parquet-output` folder.
+
+3. **Manual run (if bat complains about venv)**:
+   ```bat
+   :: In one terminal (backend)
+   cd stratbot\backend\api
+   ..\..\..\.venv\Scripts\python.exe app.py     (adjust path to his venv)
+
+   :: In another (frontend)
+   cd stratbot\frontend
+   npm install
+   npm run dev
+   ```
+
+4. The `config.py` + `dataset.py` + launcher now all respect `STRATBOT_DATASET` (or `backend/.env`), so his data can live anywhere on his C: drive.
+
+This is why we centralized paths in `backend/config.py` and made the launcher .env-aware.
+
+---
+
+See also the updated `start-stratbot.bat` comments and `backend/.env.example` for the exact steps.
 
 ---
 
@@ -202,7 +253,7 @@ It automatically handles:
 
 **If it still disappears immediately**, run from an open cmd/pwsh:
 ```
-cmd /k "J:\FYP_Project\stratbot\start-stratbot.bat"
+cmd /k "stratbot\start-stratbot.bat"
 ```
 
 ### Manual commands (if you prefer)

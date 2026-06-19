@@ -53,3 +53,13 @@ desktop.ini
 *.log
 errors.log
 progress.json
+
+# Large source 3D model assets (only the runtime copy required by the car customizer
+# in frontend/public/models/f1_2025_mclaren_mcl39/ should be committed; the root
+# "3d models/" dump with .glb/.usdz and duplicate data is unnecessary bloat)
+3d models/
+
+# Allow the detailed PBR textures for the F1 car model (the CarCustomizer loads
+# the glTF which references these; the global *.png ignore is for ML artifacts)
+!frontend/public/models/**/*.png
+!frontend/public/models/**/*.jpg

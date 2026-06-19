@@ -111,6 +111,8 @@ function App() {
             onReset={onNewRace}
             mlPredictions={race.mlPredictions}
             trackedDriverId={race.trackedDriverId}
+            lapHistory={race.lapHistory || []}
+            totalLaps={race.totalLaps}
           />
         </main>
       </div>

@@ -243,7 +243,8 @@ export function PreRaceSetup({ onStart }) {
           </p>
         </Section>
 
-        {/* FYP-II: 3D Interactive Car Customizer - visible "page" for deciding realistic team stats for your driver */}
+        {/* FYP-II: 3D Interactive Car Customizer - visible "page" for deciding realistic team stats for your driver.
+            Now with significantly enhanced procedural F1 geometry (detailed wings, halo, sidepods, PBR materials) + optional GLTF import path for max realism. */}
         <Section title="Customize Your Driver's Car (Interactive 3D F1 Team Strategy)" index={5}>
           <CarCustomizer
             stats={carStats}

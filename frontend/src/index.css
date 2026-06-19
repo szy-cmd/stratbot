@@ -117,3 +117,201 @@ body {
     linear-gradient(90deg, rgba(0, 212, 170, 0.03) 1px, transparent 1px);
   background-size: 40px 40px;
 }
+
+/* ============================================
+   POST-RACE PROFESSIONAL ANALYTICS DASHBOARD
+   Premium F1 / Bloomberg / AWS Insights style
+   ============================================ */
+
+/* Sticky report header / hero */
+.postrace-hero {
+  background: linear-gradient(180deg, #15151a 0%, #0a0a0a 100%);
+  border-bottom: 1px solid var(--f1-border);
+}
+
+/* Section navigation pills (sports analytics style) */
+.report-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px;
+  background: #111114;
+  border: 1px solid var(--f1-border);
+  border-radius: 999px;
+}
+.report-nav-btn {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  color: #a1a1aa;
+  transition: all 120ms ease;
+  white-space: nowrap;
+}
+.report-nav-btn:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.04);
+  border-color: var(--f1-border);
+}
+.report-nav-btn.active {
+  background: var(--f1-accent);
+  color: #000;
+  border-color: var(--f1-accent);
+  box-shadow: 0 0 0 1px rgba(0, 212, 170, 0.4);
+}
+.report-nav-btn .count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  opacity: 0.7;
+  margin-left: 6px;
+}
+
+/* Premium dashboard cards */
+.dashboard-card {
+  background: #15151a;
+  border: 1px solid var(--f1-border);
+  border-radius: 12px;
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+}
+.dashboard-card:hover {
+  border-color: #3a3a44;
+  transform: translateY(-1px);
+}
+.dashboard-card .card-header {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--f1-border);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #6b7280;
+  background: rgba(0,0,0,0.25);
+}
+
+/* KPI / stat tiles (presentation grade) */
+.kpi-tile {
+  background: #111114;
+  border: 1px solid var(--f1-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  text-align: center;
+}
+.kpi-tile .label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #6b7280;
+  margin-bottom: 2px;
+}
+.kpi-tile .value {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+}
+.kpi-tile .value.accent { color: var(--f1-accent); }
+.kpi-tile .value.red { color: var(--f1-red); }
+.kpi-tile .value.amber { color: #f59e0b; }
+
+/* Modern data tables (F1 timing screen feel) */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.data-table th {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #6b7280;
+  text-align: left;
+  padding: 8px 10px;
+  background: #0f0f12;
+  border-bottom: 1px solid var(--f1-border);
+  white-space: nowrap;
+}
+.data-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #222228;
+  font-feature-settings: "tnum";
+}
+.data-table tbody tr:hover {
+  background: rgba(255,255,255,0.025);
+}
+.data-table .pos-1 { color: #facc15; font-weight: 700; }
+.data-table .pos-2 { color: #cbd5e1; font-weight: 700; }
+.data-table .pos-3 { color: #d97706; font-weight: 700; }
+.data-table .delta-good { color: #4ade80; }
+.data-table .delta-bad { color: var(--f1-red); }
+.data-table .mono { font-family: 'JetBrains Mono', monospace; }
+
+/* Strategy / event timeline */
+.strategy-timeline {
+  position: relative;
+  padding-left: 22px;
+}
+.strategy-timeline::before {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  background: #2a2a32;
+}
+.timeline-item {
+  position: relative;
+  margin-bottom: 10px;
+}
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: -15px;
+  top: 4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--f1-accent);
+  border: 2px solid #0a0a0a;
+}
+.timeline-item.pit::before { background: var(--f1-red); }
+.timeline-item .lap {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--f1-accent);
+  width: 38px;
+  display: inline-block;
+}
+
+/* Section wrapper for clean separation */
+.dashboard-section {
+  scroll-margin-top: 80px;
+}
+
+/* Subtle presentation polish */
+.presentation-kpi {
+  font-feature-settings: "tnum";
+  letter-spacing: -0.02em;
+}
+
+/* Small chart container polish */
+.chart-container {
+  background: #0f0f12;
+  border: 1px solid var(--f1-border);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+/* Print / demo friendly */
+@media print {
+  .no-print { display: none !important; }
+  .postrace-hero, .dashboard-card { border: 1px solid #333; box-shadow: none; }
+}

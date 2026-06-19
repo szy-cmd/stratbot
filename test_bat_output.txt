@@ -1,0 +1,34 @@
+========================================
+  StratBot Easy Launcher (P80F25)
+  AI-assisted F1 Race Strategy Sim
+========================================
+
+Repo root: J:\FYP_Project\stratbot\
+
+[INFO] Using sibling venv: ..\.venv
+Using venv: ..\.venv\Scripts\python.exe
+
+[1/4] Checking backend...
+requirements.txt OK.
+[2/4] Resolving dataset location (STRATBOT_DATASET or backend/.env)...
+[INFO] No backend/.env found or no STRATBOT_DATASET. Using default.
+Model check: if the .joblib is missing you will need to retrain with your dataset.
+(delete backend\data\models\lap_delta_model.joblib to force retrain on next manual run)
+[3/4] Starting backend in new window...
+ERROR: Input redirection is not supported, exiting the process immediately.
+[4/4] Starting frontend in new window...
+
+========================================
+Launcher complete.
+Backend: http://127.0.0.1:5000
+Frontend: http://localhost:5173
+
+IMPORTANT FOR FRIENDS / OWN DATA:
+  - Put your f1_model_ready_2018_2025.parquet anywhere.
+  - Copy backend/.env.example -> backend/.env and set STRATBOT_DATASET= full path to your .parquet
+  - The model (.joblib) should be next to the parquet or retrain using the venv + your data.
+
+Try the Model Variant and Compound options in the Setup screen.
+Look for the ML comparison table and your custom car stats in Post-Race Summary.
+
+Press key to close this window (other windows stay open)...

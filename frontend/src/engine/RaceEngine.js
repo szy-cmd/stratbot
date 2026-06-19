@@ -237,6 +237,10 @@ export function useRaceEngine() {
   const [isFastCompleting, setIsFastCompleting] = useState(false);
   const lastLeaderLapRef = useRef(1);
 
+  /* FYP post-race analytics data capture (additive, minimal perf cost) */
+  const lapHistoryRef = useRef([]); // [{lap, positions, lapTimes, tireWears, fuels, raceTimes}] at each lap completion (raceTimes = cumulative for accurate post-race gaps)
+  const [lapHistory, setLapHistory] = useState([]);
+
   /* Lazy-init per-driver telemetry ref */
   if (allTelemetryRef.current === null) {
     const t = {};
@@ -381,6 +385,20 @@ export function useRaceEngine() {
       if (!entry) continue;
       entry.tireWear = [...entry.tireWear, { lap: lc.newLap, wear: d.tireWear }];
       entry.fuel = [...entry.fuel, { lap: lc.newLap, fuel: d.fuel }];
+
+      /* Record lap completion snapshot for post-race analytics (positions, pace, tire/fuel per lap).
+         Enhanced: includes per-driver cumulative raceTimeAtLap for accurate gap-to-leader calculations in dashboard (no more approx). */
+      const lapNum = lc.newLap;
+      let snap = lapHistoryRef.current.find((s) => s.lap === lapNum);
+      if (!snap) {
+        snap = { lap: lapNum, positions: {}, lapTimes: {}, tireWears: {}, fuels: {}, raceTimes: {} };
+        lapHistoryRef.current.push(snap);
+      }
+      snap.positions[d.id] = d.position;
+      snap.lapTimes[d.id] = parseFloat(d.lapTime);
+      snap.tireWears[d.id] = d.tireWear;
+      snap.fuels[d.id] = d.fuel;
+      snap.raceTimes[d.id] = d.totalRaceTime || 0; // cumulative for precise gaps
     }
 
     // Push tracked driver's data to React state (triggers chart re-render)
@@ -425,6 +443,9 @@ export function useRaceEngine() {
       setPaused(true);
       isFastCompletingRef.current = false;
       setIsFastCompleting(false);
+      // Snapshot history for post-race dashboard (sorted by lap for charts)
+      const finalHistory = [...lapHistoryRef.current].sort((a, b) => a.lap - b.lap);
+      setLapHistory(finalHistory);
     }
   }, []);
 
@@ -464,6 +485,9 @@ export function useRaceEngine() {
     setIsFastCompleting(false);
     isFastCompletingRef.current = false;
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    // Ensure history captured for manual end too
+    const finalHistory = [...(lapHistoryRef.current || [])].sort((a, b) => a.lap - b.lap);
+    setLapHistory(finalHistory);
   }, []);
 
   /** Start (or restart) the race with a config object from PreRaceSetup. */
@@ -485,6 +509,8 @@ export function useRaceEngine() {
     tickCountRef.current = 0;
     peakSpeedsRef.current = {};
     lastLeaderLapRef.current = 1;
+    lapHistoryRef.current = [];
+    setLapHistory([]);
     fastForwardRef.current = false;
 
     const initial = sortAndRank(buildInitialDrivers(cfg.carStats, cfg.trackedDriver));
@@ -523,6 +549,8 @@ export function useRaceEngine() {
     setMlPredictions([]);
     setIsFastCompleting(false);
     isFastCompletingRef.current = false;
+    lapHistoryRef.current = [];
+    setLapHistory([]);
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
   }, []);
 
@@ -607,5 +635,7 @@ export function useRaceEngine() {
     useMLDeltas: useMLDeltasRef.current,
     isFastCompleting,
     fastCompleteRace,
+    /* New: rich lap-by-lap history for post-race analytics dashboard (positions, lapTimes, tire/fuel) */
+    lapHistory,
   };
 }
