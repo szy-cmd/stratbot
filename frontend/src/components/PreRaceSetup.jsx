@@ -85,7 +85,6 @@ export function PreRaceSetup({ onStart }) {
 
   // Car customization state (FYP-II interactive 3D)
   const [carStats, setCarStats] = useState({ compound: 'medium', initialTyreWear: 0, aeroLevel: 5, powerLevel: 5 });
-  const [showCustomizer, setShowCustomizer] = useState(false);
 
   const handleLogin = async () => {
     setLoginError('');
@@ -242,12 +241,23 @@ export function PreRaceSetup({ onStart }) {
           <p className="mt-2 text-[10px] text-gray-600 text-center">
             You will make strategic decisions for this driver. You can still view other drivers' telemetry during the race.
           </p>
-          <button 
-            onClick={() => setShowCustomizer(true)}
-            className="mt-3 w-full rounded-lg border border-f1-accent/60 bg-f1-accent/5 py-2 text-sm font-display uppercase tracking-wider text-f1-accent hover:bg-f1-accent/10 transition"
-          >
-            Customize {DRIVERS.find(d => d.id === trackedDriver)?.name || 'Car'} (3D Visual)
-          </button>
+        </Section>
+
+        {/* FYP-II: 3D Interactive Car Customizer - visible "page" for deciding realistic team stats for your driver */}
+        <Section title="Customize Your Driver's Car (Interactive 3D F1 Team Strategy)" index={5}>
+          <CarCustomizer
+            stats={carStats}
+            onStatsChange={setCarStats}
+            driverName={DRIVERS.find(d => d.id === trackedDriver)?.name}
+            driverColor={DRIVERS.find(d => d.id === trackedDriver)?.color}
+            weather={weather}
+            trackName={TRACK_OPTIONS.find(t => t.id === trackId)?.name}
+            onClose={() => {}}  // no close, always visible in section
+            onApply={(newStats) => setCarStats(newStats)}
+          />
+          <p className="mt-2 text-[10px] text-gray-600 text-center">
+            This is your dedicated page to decide tyres, setup etc. realistically as the team for this specific driver. Changes are live in 3D and will affect the simulation and ML results accurately.
+          </p>
         </Section>
 
         {/* Starting Compound (affects ML LapDelta prediction directly via CompoundCode) */}
@@ -369,23 +379,6 @@ export function PreRaceSetup({ onStart }) {
           </div>
         </div>
       </div>
-
-      {/* 3D Car Customizer Modal - nice interactive visual like driving game car select */}
-      {showCustomizer && (
-        <CarCustomizer
-          stats={carStats}
-          onStatsChange={setCarStats}
-          driverName={DRIVERS.find(d => d.id === trackedDriver)?.name}
-          driverColor={DRIVERS.find(d => d.id === trackedDriver)?.color}
-          weather={weather}
-          trackName={TRACK_OPTIONS.find(t => t.id === trackId)?.name}
-          onClose={() => setShowCustomizer(false)}
-          onApply={(newStats) => {
-            setCarStats(newStats);
-            setShowCustomizer(false);
-          }}
-        />
-      )}
     </div>
   );
 }
