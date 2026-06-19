@@ -41,7 +41,11 @@ export function useStratBotModel({ driver, lap, totalLaps, raceConfig, enabled =
       stint: (driver.pitStops ?? 0) + 1,
       weather: raceConfig?.weather || 'clear',
       variant: raceConfig?.modelVariant || 'base',
-      air_temp_avg: undefined,  // will use weather bias in predictor
+      // FYP-II: pass custom car stats for the chosen driver for accurate ML + sim
+      initial_tyre_wear: raceConfig?.carStats?.initialTyreWear || 0,
+      aero_level: raceConfig?.carStats?.aeroLevel || 5,
+      power_level: raceConfig?.carStats?.powerLevel || 5,
+      air_temp_avg: undefined,
       track_temp_avg: undefined,
       humidity_avg: undefined,
       wind_speed_avg: undefined,

@@ -126,9 +126,11 @@ function speedProfile(progress) {
   return 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(p * Math.PI * 6)) * (0.5 + 0.5 * Math.cos(p * Math.PI * 2.5));
 }
 
-function buildInitialDrivers() {
+function buildInitialDrivers(customCarStats = null, trackedId = null) {
   return DRIVERS.slice(0, 10).map((d, i) => {
     const lapTime = LAP_TIME_BASE + (Math.random() - 0.5) * 2;
+    const isTracked = d.id === trackedId && customCarStats;
+    const initialWear = isTracked ? (100 - (customCarStats.initialTyreWear || 0)) : 100;
     return {
       ...d,
       position: i + 1,
@@ -140,9 +142,10 @@ function buildInitialDrivers() {
       interval: '—',
       delta: '—',
       pitStops: 0,
-      tireWear: 100,
+      tireWear: initialWear,
       fuel: INITIAL_FUEL_KG,
       currentSpeed: 0,
+      customStats: isTracked ? customCarStats : null, // attach for per-driver use
     };
   });
 }
@@ -215,6 +218,8 @@ export function useRaceEngine() {
   const useMLDeltasRef = useRef(false);
   const dataModeRef = useRef('mock');
 
+  const customCarStatsRef = useRef(null); // FYP-II: per-driver custom stats from 3D customizer (tyre, aero, power)
+
   const isFastCompletingRef = useRef(false); // for full sim fast forward with loading
 
   const nextDecisionIndexRef = useRef(0);
@@ -285,10 +290,23 @@ export function useRaceEngine() {
 
       const wx = WEATHER_PRESETS[configRef.current.weather] || WEATHER_PRESETS.clear;
       const sf = speedProfile(lapProgress);
-      const tireEffect = Math.max(0.85, tireWear / 100);
+      let tireEffect = Math.max(0.85, tireWear / 100);
+      let speedMult = wx.speedMult;
+
+      // FYP-II: apply custom car stats ONLY to the tracked driver's physics for accurate results
+      const trackedId = trackedIdRef.current;
+      const isTracked = d.id === trackedId;
+      if (isTracked && d.customStats) {
+        const cs = d.customStats;
+        // Aero reduces effective deg (more downforce = less slide)
+        tireEffect *= (1 - (cs.aeroLevel - 5) / 25);
+        // Power boosts speed, but more fuel use later
+        speedMult *= (cs.powerLevel / 5);
+      }
+
       const currentSpeed = Math.round(
         MIN_SPEED_KMH +
-          (MAX_SPEED_KMH - MIN_SPEED_KMH) * Math.max(0.2, sf) * tireEffect * wx.speedMult +
+          (MAX_SPEED_KMH - MIN_SPEED_KMH) * Math.max(0.2, sf) * tireEffect * speedMult +
           (Math.random() - 0.5) * 8
       );
 
@@ -297,8 +315,19 @@ export function useRaceEngine() {
         lap += 1;
         totalRaceTime += lapTime;
         lapTime = LAP_TIME_BASE + (Math.random() - 0.5) * 2;
-        tireWear = Math.max(0, tireWear - (TIRE_DEG_PER_LAP * wx.tireDeg) - Math.random() * 0.5);
-        fuel = Math.max(0, fuel - (FUEL_PER_LAP * wx.fuelMult) - (Math.random() - 0.3) * 0.4);
+        // FYP-II: apply custom car stats for tracked driver (realistic team strategy for specific driver)
+        let tireDegMult = wx.tireDeg;
+        let fuelMult = wx.fuelMult;
+        const isTracked = d.id === trackedIdRef.current;
+        if (isTracked && d.customStats) {
+          const cs = d.customStats;
+          const aeroFactor = 1 - (cs.aeroLevel - 5) / 30; // high aero = less deg
+          tireDegMult *= Math.max(0.7, aeroFactor);
+          const powerFactor = cs.powerLevel / 5;
+          fuelMult *= powerFactor;
+        }
+        tireWear = Math.max(0, tireWear - (TIRE_DEG_PER_LAP * tireDegMult) - Math.random() * 0.5);
+        fuel = Math.max(0, fuel - (FUEL_PER_LAP * fuelMult) - (Math.random() - 0.3) * 0.4);
 
         lapCompletions.push({ id: d.id, newLap: lap });
       }
@@ -429,6 +458,7 @@ export function useRaceEngine() {
     decisionLapsRef.current = ALL_DECISION_LAPS.filter((l) => l <= cfg.totalLaps);
     useMLDeltasRef.current = !!cfg.useMLDeltas;
     dataModeRef.current = cfg.dataMode || 'mock';
+    customCarStatsRef.current = cfg.carStats || null;
     isFastCompletingRef.current = false;
     setRaceConfig(cfg);
 
@@ -441,7 +471,7 @@ export function useRaceEngine() {
     lastLeaderLapRef.current = 1;
     fastForwardRef.current = false;
 
-    const initial = sortAndRank(buildInitialDrivers());
+    const initial = sortAndRank(buildInitialDrivers(cfg.carStats, cfg.trackedDriver));
     driversRef.current = initial;
 
     const t = {};

@@ -109,13 +109,29 @@ class LapDeltaPredictor:
             "DRS_max": float(payload.get("drs_max", medians["DRS_max"])),
             "FuelProxy": float(payload.get("fuel_proxy", total_laps - lap_number)),
             "DriverDelta": float(payload.get("driver_delta", driver_delta)),
-            # Weather features - always provided now (median or weather-biased for live sim)
+            # FYP-II: use custom car stats from 3D customizer for this driver's team strategy (realistic for specific driver)
             "AirTemp_Avg": float(payload.get("air_temp_avg", wx_bias["AirTemp_Avg"])),
             "TrackTemp_Avg": float(payload.get("track_temp_avg", wx_bias["TrackTemp_Avg"])),
             "Humidity_Avg": float(payload.get("humidity_avg", wx_bias["Humidity_Avg"])),
             "WindSpeed_Avg": float(payload.get("wind_speed_avg", wx_bias["WindSpeed_Avg"])),
             "Rainfall_Max": float(payload.get("rainfall_max", wx_bias["Rainfall_Max"])),
         }
+
+        # Apply custom car stats if provided (from 3D team strategy selection for the driver)
+        if "initial_tyre_wear" in payload:
+            custom_wear = float(payload.get("initial_tyre_wear", 0))
+            row["TyreLife"] = max(1, 100 - custom_wear)  # lower life for higher start wear
+        if "aero_level" in payload:
+            aero = float(payload.get("aero_level", 5))
+            # High aero: better braking/stability, slightly lower speed_mean bias
+            row["Brake_mean"] = min(1.0, row["Brake_mean"] + (aero - 5) * 0.02)
+            row["Speed_mean"] = max(150, row["Speed_mean"] - (aero - 5) * 1.5)
+        if "power_level" in payload:
+            power = float(payload.get("power_level", 5))
+            # Higher power: faster, but affects fuel proxy indirectly via sim
+            row["Speed_mean"] = min(280, row["Speed_mean"] + (power - 5) * 3)
+            row["RPM_mean"] = min(12000, row["RPM_mean"] + (power - 5) * 200)
+
         return row
 
     def predict_from_race_state(self, payload: dict) -> dict:
