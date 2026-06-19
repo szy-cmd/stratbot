@@ -364,12 +364,16 @@ function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', 
         console.table(MODEL_INTEGRATION_SUMMARY);
         console.log('All teams use same BASE_MODEL_SCALE + dynamic bbox framing + normalize (center/ground/orient + TEAM_POSITION_OFFSETS for fine-tune) + identical OrbitControls + camera presets.');
         console.log('Issues discovered: (1) Part names for classify/hover/click are McLaren-centric so may be incomplete on other models (e.g. tyres/wings may still tag via broad keywords). (2) Some rots/scales/offsets are best-guess and may need visual tweak via the TEAM_* consts. (3) Livery tint only on McLaren; others use baked team textures (correct). (4) No models were missing after copy.');
-        console.log('Fallback: if primary 404/ fail, auto uses McLaren + warn logged.');
         console.log('To fine-tune Mercedes (or others):');
         console.log('  - TEAM_POSITION_OFFSETS["Mercedes"] moves the car body (placement in view).');
         console.log('  - TEAM_TARGET_CENTER_OFFSETS["Mercedes"] shifts the orbit target / rotation center (the "axis" the car rotates around during mouse drag / presets). This is likely what you need for "rotate along its axis the same".');
         console.log('Edit either (or both), SAVE, then click the RESET button in the 3D toolbar (or switch driver and back) to re-apply framing with new values. The target one keeps the camera math neutral while choosing a better pivot point on the car.');
         console.log('Ground plane ≈ y=-0.05. Use external glTF viewer (e.g. https://gltf-viewer.donmccurdy.com/) or Blender on the Mercedes scene.gltf to inspect its RootNode / Body_low transform and estimate offsets from center.');
+      }
+      if (team === 'Mercedes') {
+        // Extra debug for Mercedes: log the centers used for this load so you can see what the offsets are doing.
+        console.log('[Mercedes debug] native bbox center (pre any adj):', box.getCenter(new THREE.Vector3()));
+        console.log('[Mercedes debug] effective target center after TEAM_TARGET_CENTER_OFFSETS:', /* will be logged by framing too */);
       }
     }
     if (usingFallback) {
@@ -607,12 +611,21 @@ function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', 
     const size = box.getSize(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z);
 
+    if (team === 'Mercedes') {
+      console.log('[Mercedes debug] pure normalized center (from temp bbox):', center.clone());
+    }
+
     // Apply target center adjustment (shifts the rotation pivot / orbit center without moving the model).
     // This is the key for making "rotate along its axis" feel consistent across models.
     const targetAdj = TEAM_TARGET_CENTER_OFFSETS[team] || { x: 0, y: 0, z: 0 };
     center.x += (targetAdj.x || 0);
     center.y += (targetAdj.y || 0);
     center.z += (targetAdj.z || 0);
+
+    if (team === 'Mercedes') {
+      console.log('[Mercedes debug] effective framing center after targetAdj:', center.clone());
+      console.log('[Mercedes debug] current TEAM_TARGET_CENTER_OFFSETS Mercedes:', TEAM_TARGET_CENTER_OFFSETS['Mercedes']);
+    }
 
     // Effective scale the model will have in the scene (base tuned for this export + current user zoom)
     const scaleMult = TEAM_SCALE_MULT[team] || 1;
