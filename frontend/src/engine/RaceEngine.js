@@ -209,9 +209,13 @@ export function useRaceEngine() {
   const [fastForward, setFastForward] = useState(false);
   const fastForwardRef = useRef(false);
 
+  const [isFastCompleting, setIsFastCompleting] = useState(false);
+
   const currentMLDeltaRef = useRef(0);  // FYP-II: current LapDelta from ML to influence sim
   const useMLDeltasRef = useRef(false);
   const dataModeRef = useRef('mock');
+
+  const isFastCompletingRef = useRef(false); // for full sim fast forward with loading
 
   const nextDecisionIndexRef = useRef(0);
   const rafRef = useRef(null);
@@ -256,7 +260,10 @@ export function useRaceEngine() {
       nextDecisionLap != null && leaderLap === nextDecisionLap - 1 && leader?.lapProgress > 85;
 
     const ffMultiplier = fastForwardRef.current ? FAST_FORWARD_MULTIPLIER : 1;
-    const progressDelta = (approaching ? PROGRESS_SLOW : PROGRESS_PER_TICK) * ffMultiplier;
+    let progressDelta = (approaching ? PROGRESS_SLOW : PROGRESS_PER_TICK) * ffMultiplier;
+    if (isFastCompletingRef.current) {
+      progressDelta *= 25; // very aggressive to complete full sim quickly
+    }
     const lapCompletions = [];
 
     const next = prev.map((d) => {
@@ -354,14 +361,26 @@ export function useRaceEngine() {
       const idx = nextDecisionIndexRef.current;
       nextDecisionIndexRef.current = Math.min(idx + 1, activeLaps.length);
       setDecisionIndex(idx);
-      setPaused(true);
-      setSlowing(false);
+      if (isFastCompletingRef.current) {
+        // Auto-resolve decision for full fast sim: pick highest probability branch, add highlight
+        const turn = TURNS.find(t => t.lap === nextDecisionLap);
+        if (turn && turn.branches && turn.branches.length > 0) {
+          const best = turn.branches.reduce((a, b) => (b.probability > a.probability ? b : a));
+          setHighlightsLog((prev) => [...prev, { time: Date.now(), text: `Lap ${turn.lap}: AUTO ${best.label} — ${best.outcome} (fast sim)` }]);
+        }
+        setPaused(false);  // continue without pause
+      } else {
+        setPaused(true);
+        setSlowing(false);
+      }
     }
 
     /* Race finish */
     if (newLeaderLap > totalLapsRef.current) {
       setRaceFinished(true);
       setPaused(true);
+      isFastCompletingRef.current = false;
+      setIsFastCompleting(false);
     }
   }, []);
 
@@ -397,6 +416,8 @@ export function useRaceEngine() {
   const endSimulation = useCallback(() => {
     setRaceFinished(true);
     setPaused(true);
+    setIsFastCompleting(false);
+    isFastCompletingRef.current = false;
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
   }, []);
 
@@ -408,6 +429,7 @@ export function useRaceEngine() {
     decisionLapsRef.current = ALL_DECISION_LAPS.filter((l) => l <= cfg.totalLaps);
     useMLDeltasRef.current = !!cfg.useMLDeltas;
     dataModeRef.current = cfg.dataMode || 'mock';
+    isFastCompletingRef.current = false;
     setRaceConfig(cfg);
 
     trackedIdRef.current = cfg.trackedDriver;
@@ -432,6 +454,8 @@ export function useRaceEngine() {
     setDecisionIndex(-1);
     setSlowing(false);
     setRaceFinished(false);
+    setIsFastCompleting(false);
+    isFastCompletingRef.current = false;
     setTelemetryHistory({ speed: [], tireWear: [{ lap: 1, wear: 100 }], fuel: [{ lap: 1, fuel: INITIAL_FUEL_KG }] });
     setHighlightsLog([]);
     setRaceFeed([]);
@@ -448,6 +472,8 @@ export function useRaceEngine() {
     setDecisionIndex(-1);
     setSlowing(false);
     setMlPredictions([]);
+    setIsFastCompleting(false);
+    isFastCompletingRef.current = false;
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
   }, []);
 
@@ -465,6 +491,17 @@ export function useRaceEngine() {
   const setCurrentMLDelta = useCallback((delta) => {
     currentMLDeltaRef.current = parseFloat(delta) || 0;
   }, []);
+
+  /** FYP-II: button to complete FULL SIMULATION fast (shows "loading" while advancing quickly to see final results) */
+  const fastCompleteRace = useCallback(() => {
+    if (raceFinished || !started) return;
+    isFastCompletingRef.current = true;
+    setIsFastCompleting(true);
+    fastForwardRef.current = true;
+    setFastForward(true);
+    setPaused(false);
+    setSlowing(false);
+  }, [raceFinished, started]);
 
   return {
     drivers,
@@ -493,5 +530,7 @@ export function useRaceEngine() {
     recordPrediction,
     setCurrentMLDelta,  // for ML integration into sim
     useMLDeltas: useMLDeltasRef.current,
+    isFastCompleting,
+    fastCompleteRace,
   };
 }
