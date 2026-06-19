@@ -110,7 +110,7 @@ const TEAM_TARGET_CENTER_OFFSETS = {
 // Set to +1 for a model if front parts have positive Z (causes front wing labeled rear, front tire as exhaust etc.).
 const TEAM_FRONT_Z_SIGN = {
   'McLaren': -1,
-  'Red Bull': -1,
+  'Red Bull': 1,   // set to +1 to fix front tires being treated as rear (exhaust)
   'Aston Martin': -1,
   'Mercedes': 1,   // flipped from symptom "front wing mislabeled as rear"
   'Ferrari': -1,
@@ -251,19 +251,24 @@ function getSpatialClassification(mesh, team = 'McLaren') {
   const isFront = Math.sign(center.z || 0) === zSignForFront;
   const isRear = Math.sign(center.z || 0) === -zSignForFront;
 
-  // Tyres: small, low, sides, or confirmed by pirelli material
-  if ((size.y < 1.2 && vol < 2 && Math.abs(center.x) > 0.3 && center.y < 0.8) || hasPirelli) {
+  if (team === 'Red Bull' || team === 'Mercedes') {
+    console.log(`[SpatialAttempt ${team}] mesh="${mesh.name || 'anon'}" c.z=${center.z.toFixed(2)} sz=(${size.x.toFixed(1)},${size.y.toFixed(1)},${size.z.toFixed(1)}) vol=${vol.toFixed(1)} mats=${matNames.substring(0,60)}`);
+  }
+
+  // Tyres: small, low, sides, or confirmed by pirelli/wheel/sk material (strong for Red Bull)
+  if ((size.y < 1.2 && vol < 2 && Math.abs(center.x) > 0.3 && center.y < 0.8) || hasPirelli || hasWheelMat) {
     return { id: 'tyres', label: 'Wheels & Tyres', group: isFront ? 'front_tire' : 'rear_tire' };
   }
 
-  // Wings / aero: thin + large span, or wing material, at front/rear
-  if (((size.y < 0.6 && (size.x > 1.2 || size.z > 1.2) && Math.abs(center.z) > 0.8) || hasWingMat) && Math.abs(center.z) > 0.5) {
+  // Wings / aero: relatively flat (small y), decent span, at extreme z, or wing material. Relaxed for W14 thicker wings.
+  if (((size.y < 1.0 && (size.x > 0.8 || size.z > 0.8) && Math.abs(center.z) > 0.3) || hasWingMat) && Math.abs(center.z) > 0.3) {
     const group = isFront ? 'front_wing' : 'rear_wing';
     return { id: 'aero', label: isFront ? 'Front Wing' : 'Rear Wing', group };
   }
 
-  // Body / chassis: central + volume, or body material
-  if (((Math.abs(center.x) < 1.2 && Math.abs(center.z) < 1.8 && vol > 3 && size.x > 0.8 && size.z > 0.8) || hasBodyMat) && !hasWingMat) {
+  // Body / chassis: central + volume, or body material, or low flat large (floor/underbody for Red Bull "bottom")
+  const isLowFlatLarge = size.y < 0.5 && center.y < 0 && (size.x > 1.5 || size.z > 1.5);
+  if (((Math.abs(center.x) < 1.2 && Math.abs(center.z) < 1.8 && vol > 3 && size.x > 0.8 && size.z > 0.8) || hasBodyMat || isLowFlatLarge) && !hasWingMat) {
     return { id: 'body', label: 'Chassis / Body', group: 'body' };
   }
 
