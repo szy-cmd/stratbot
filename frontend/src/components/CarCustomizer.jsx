@@ -105,6 +105,18 @@ const TEAM_TARGET_CENTER_OFFSETS = {
   'Alpine': { x: 0, y: 0, z: 0 },
 };
 
+// Per-team sign for Z coordinate after normalization to determine "front".
+// -1 means negative Z values are "front" parts (standard for most after our rots).
+// Set to +1 for a model if front parts have positive Z (causes front wing labeled rear, front tire as exhaust etc.).
+const TEAM_FRONT_Z_SIGN = {
+  'McLaren': -1,
+  'Red Bull': -1,
+  'Aston Martin': -1,
+  'Mercedes': 1,   // flipped from symptom "front wing mislabeled as rear"
+  'Ferrari': -1,
+  'Alpine': -1,
+};
+
 // Static summary for validation (see console on first customizer load)
 // Note: values below are the live ones from the *consts* above (user can edit TEAM_* maps for fine-tuning).
 const MODEL_INTEGRATION_SUMMARY = {
@@ -159,7 +171,7 @@ function classifyNodeName(name) {
 }
 
 /** Meshes are named Object_N — walk parents + materials to find the real part */
-function resolvePartFromObject(obj) {
+function resolvePartFromObject(obj, team = 'McLaren') {
   if (obj?.userData?.partId) {
     return { id: obj.userData.partId, label: obj.userData.partLabel };
   }
@@ -178,7 +190,7 @@ function resolvePartFromObject(obj) {
       if (hit) return hit;
     }
     // Spatial fallback for bad naming (W14 Cubes, some Red Bull parts)
-    const spatial = getSpatialClassification(obj);
+    const spatial = getSpatialClassification(obj, team);
     if (spatial) return spatial;
   }
 
@@ -186,7 +198,7 @@ function resolvePartFromObject(obj) {
 }
 
 /** Finer group for hover/select — e.g. front axle vs rear axle */
-function resolvePartGroup(obj) {
+function resolvePartGroup(obj, team = 'McLaren') {
   if (obj?.userData?.partGroup) return obj.userData.partGroup;
 
   let current = obj;
@@ -205,14 +217,13 @@ function resolvePartGroup(obj) {
 
   // Spatial fallback for group (used for hover highlighting whole front/rear tyres or wings)
   if (obj?.isMesh) {
-    const spatial = getSpatialClassification(obj);
+    const spatial = getSpatialClassification(obj, team);
     if (spatial && spatial.group) {
       return spatial.group;
     }
-    // If spatial gave a category but no specific group, fall back to name resolve which now includes spatial
   }
 
-  return resolvePartFromObject(obj).id;
+  return resolvePartFromObject(obj, team).id;
 }
 
 /**
@@ -220,7 +231,7 @@ function resolvePartGroup(obj) {
  * Uses position in the *normalized* model space (center at 0,0,0 after our normalizeOrientationAndCenter).
  * Assumes after per-team rotation normalization, length axis is roughly Z, with negative Z = front (tweak isFront sign if reversed).
  */
-function getSpatialClassification(mesh) {
+function getSpatialClassification(mesh, team = 'McLaren') {
   if (!mesh || !mesh.isMesh) return null;
   const box = new THREE.Box3().setFromObject(mesh);
   const center = box.getCenter(new THREE.Vector3());
@@ -233,12 +244,12 @@ function getSpatialClassification(mesh) {
   const hasPirelli = matNames.includes('pirelli');
   const hasWingMat = matNames.includes('wing') || matNames.includes('flap') || matNames.includes('spoiler') || matNames.includes('carbon');
   const hasBodyMat = matNames.includes('body') || matNames.includes('paint') || matNames.includes('main') || matNames.includes('chassis');
+  const hasWheelMat = matNames.includes('wheel') || matNames.includes('sk') || matNames.includes('rim');
 
-  // Heuristic forward: negative Z is front (based on viewing dir and McLaren working front/rear).
-  // If after testing with Red Bull / Mercedes you find front/rear swapped (e.g. front tyre click selects rear group),
-  // flip the sign here to: const isFront = center.z > 0;
-  const isFront = center.z < 0;
-  const isRear = center.z > 0;
+  // Use per-team Z sign for front (set in TEAM_FRONT_Z_SIGN so Red Bull/Mercedes front/rear are correct)
+  const zSignForFront = TEAM_FRONT_Z_SIGN[team] || -1;
+  const isFront = Math.sign(center.z || 0) === zSignForFront;
+  const isRear = Math.sign(center.z || 0) === -zSignForFront;
 
   // Tyres: small, low, sides, or confirmed by pirelli material
   if ((size.y < 1.2 && vol < 2 && Math.abs(center.x) > 0.3 && center.y < 0.8) || hasPirelli) {
@@ -261,23 +272,28 @@ function getSpatialClassification(mesh) {
     return { id: 'power', label: 'Engine / Exhaust', group: 'exhaust' };
   }
 
+  if ((team === 'Red Bull' || team === 'Mercedes') ) {
+    // Log every spatial attempt for these teams so user can see why a click got tyres/wing/body/unknown/exhaust
+    console.log(`[SpatialAttempt ${team}] mesh="${mesh.name || 'anon'}" c.z=${center.z.toFixed(2)} sz=(${size.x.toFixed(1)},${size.y.toFixed(1)},${size.z.toFixed(1)}) mat=${matNames.substring(0,80)}`);
+  }
+
   return null;
 }
 
 /** Stamp every mesh once so clicks/hover don't re-walk the hierarchy */
-function tagModelParts(scene) {
+function tagModelParts(scene, team = 'McLaren') {
   if (!scene) return;
   scene.traverse((child) => {
     if (!child.isMesh) return;
-    const part = resolvePartFromObject(child);
+    const part = resolvePartFromObject(child, team);
     child.userData.partId = part.id;
     child.userData.partLabel = part.label;
-    child.userData.partGroup = resolvePartGroup(child);
+    child.userData.partGroup = resolvePartGroup(child, team);
   });
 }
 
 function meshPartId(mesh) {
-  return mesh?.userData?.partId ?? resolvePartFromObject(mesh).id;
+  return mesh?.userData?.partId ?? resolvePartFromObject(mesh, 'McLaren').id;
 }
 
 function meshPartGroup(mesh) {
@@ -685,7 +701,7 @@ function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', 
 
   const handleClick = (e) => {
     e.stopPropagation();
-    const part = resolvePartFromObject(e.object);
+    const part = resolvePartFromObject(e.object, team);
     onPartClick?.({ ...part, group: meshPartGroup(e.object) });
   };
 
@@ -760,7 +776,7 @@ function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', 
   // viewZoom (passed from UI) lets the user magnify the car in the viewport independently of the actual car physics stats.
   // Base scale tuned for this exported model; user can make it much larger/smaller.
   const model = gltf.scene.clone(); // clone so we don't mutate the cached original across re-renders/stats
-  tagModelParts(model);
+  tagModelParts(model, team);
   // Team model normalization (center, ground, orientation) so every car presents identically
   normalizeOrientationAndCenter(model, team);
   modelRef.current = model;
