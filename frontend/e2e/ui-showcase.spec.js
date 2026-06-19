@@ -19,29 +19,7 @@ test.describe('StratBot UI Showcase', () => {
     await page.waitForTimeout(3000);
   });
 
-  test('3D Modeler - Clear weather (showcase car customizer)', async ({ page }) => {
-    // Default is clear
-    await page.screenshot({
-      path: 'screenshots/3d-modeler-clear.png',
-      fullPage: true,
-    });
-  });
-
-  test('3D Modeler - Rainy weather (brighter car against custom dark BG)', async ({ page }) => {
-    // Select rainy weather in the setup
-    // Look for weather cards or buttons
-    const rainyButton = page.locator('button, div', { hasText: /Rainy|rainy/ }).first();
-    if (await rainyButton.isVisible()) {
-      await rainyButton.click();
-      await page.waitForTimeout(1500); // allow weather change to update 3D lights/BG
-    }
-    await page.screenshot({
-      path: 'screenshots/3d-modeler-rainy.png',
-      fullPage: true,
-    });
-  });
-
-  test('3D Modeler - Overcast weather', async ({ page }) => {
+  test('3D Modeler - Overcast weather (updated capture)', async ({ page }) => {
     const overcastButton = page.locator('button, div', { hasText: /Overcast|overcast/ }).first();
     if (await overcastButton.isVisible()) {
       await overcastButton.click();
@@ -56,16 +34,6 @@ test.describe('StratBot UI Showcase', () => {
   test('PreRaceSetup full - with 3D viewer and controls', async ({ page }) => {
     await page.screenshot({
       path: 'screenshots/pre-race-setup.png',
-      fullPage: true,
-    });
-  });
-
-  test('Main App - Boot to Setup transition', async ({ page }) => {
-    // This captures the boot sequence UI if still visible, or current setup
-    await page.goto('/');
-    await page.waitForTimeout(2000);
-    await page.screenshot({
-      path: 'screenshots/app-boot-setup.png',
       fullPage: true,
     });
   });
