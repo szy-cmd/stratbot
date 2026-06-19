@@ -374,6 +374,42 @@ function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', 
         // Extra debug for Mercedes: log the centers used for this load so you can see what the offsets are doing.
         console.log('[Mercedes debug] native bbox center (pre any adj):', box.getCenter(new THREE.Vector3()));
         console.log('[Mercedes debug] effective target center after TEAM_TARGET_CENTER_OFFSETS:', /* will be logged by framing too */);
+
+        // === Automated in-project inspection (as requested) ===
+        // 1. Detailed bbox for deciding origin (you believe it's at driver seat)
+        const nativeBox = new THREE.Box3().setFromObject(gltf.scene);
+        console.log('[Mercedes origin debug - bbox] min:', nativeBox.min, 'max:', nativeBox.max, 'center:', nativeBox.getCenter(new THREE.Vector3()), 'size:', nativeBox.getSize(new THREE.Vector3()));
+
+        // 2. Find nodes that might be "driver seat" / interior to see their world position relative to center
+        console.log('[Mercedes node positions - look for seat/driver/interior]');
+        gltf.scene.traverse((child) => {
+          const n = (child.name || '').toLowerCase();
+          if (n.includes('seat') || n.includes('driver') || n.includes('interior') || n.includes('steering') || n.includes('cockpit') || n.includes('body')) {
+            const wp = new THREE.Vector3();
+            child.getWorldPosition(wp);
+            console.log(`  ${child.name} -> world pos (relative to model origin):`, wp);
+          }
+        });
+
+        // 3. "Open the glTF in text editor" equivalent - fetch and print root node transforms
+        fetch(modelUrl)
+          .then(r => r.json())
+          .then(g => {
+            console.log('[Mercedes glTF JSON root nodes - translations/rotations (origin info)]');
+            const sceneNodeIndices = g.scenes?.[0]?.nodes || [];
+            sceneNodeIndices.forEach(idx => {
+              const node = g.nodes?.[idx];
+              if (node) {
+                console.log(`  Root node ${node.name || idx}: translation=${JSON.stringify(node.translation) || 'identity (0,0,0)'}, rotation=${JSON.stringify(node.rotation) || 'identity'}`);
+              }
+            });
+            // Show any nodes with non-trivial translation (the offset is often baked here or in geometry)
+            const interesting = (g.nodes || []).filter(n => n.translation && (n.translation.some(v => Math.abs(v) > 0.01)));
+            if (interesting.length) {
+              console.log('  Nodes with translations (potential origin clues):', interesting.slice(0,5).map(n => ({name: n.name, trans: n.translation})));
+            }
+          })
+          .catch(err => console.log('glTF JSON fetch for inspection:', err.message));
       }
     }
     if (usingFallback) {
@@ -625,6 +661,7 @@ function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', 
     if (team === 'Mercedes') {
       console.log('[Mercedes debug] effective framing center after targetAdj:', center.clone());
       console.log('[Mercedes debug] current TEAM_TARGET_CENTER_OFFSETS Mercedes:', TEAM_TARGET_CENTER_OFFSETS['Mercedes']);
+      console.log('[Mercedes framing] Using this center as orbit target. Adjust TEAM_TARGET_CENTER_OFFSETS if rotation pivot feels off (e.g. around driver seat instead of chassis center).');
     }
 
     // Effective scale the model will have in the scene (base tuned for this export + current user zoom)
