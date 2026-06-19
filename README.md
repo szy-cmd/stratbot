@@ -5,9 +5,9 @@ DHA Suffa University — Final Year Project
 
 **Team**
 
-- **Zaafir Ejaz** — Telemetry collection & ML pipeline
-- **Ebad Ahmed** — Dataset processing & feature engineering
-- **Fatima Ather Rajput** — Research analysis & data compilation
+- **Zaafir Ejaz** - Telemetry collection & ML pipeline
+- **Ebad Ahmed** - Dataset processing & feature engineering
+- **Fatima Ather Rajput** - Research analysis & data compilation
 
 **Supervisor:** Dr. Huma Jamshed
 
@@ -265,9 +265,9 @@ Open http://localhost:5173 .
 
 ## Team Responsibilities (from SDS)
 
-- **Zaafir Ejaz** — Telemetry collection & ML pipeline
-- **Ebad Ahmed** — Dataset processing & feature engineering
-- **Fatima Ather Rajput** — Research analysis & data compilation
+- **Zaafir Ejaz** - Telemetry collection & ML pipeline
+- **Ebad Ahmed** - Dataset processing & feature engineering
+- **Fatima Ather Rajput** - Research analysis & data compilation
 
 ## References
 
