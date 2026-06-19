@@ -76,15 +76,31 @@ const TEAM_SCALE_MULT = {
   'Alpine': 1.0,
 };
 
-// Per-team additional position offset (applied AFTER bbox centering + ground alignment).
-// Use this to fine-tune when a model's internal origin/pivot makes the car appear translated
-// relative to others even after automatic normalization. Edit the Mercedes entry and reload to tune.
-// Values are in the model's local space after rotation/centering/grounding.
+// Per-team additional position offset (applied AFTER bbox centering + ground alignment, only to rendered model).
+// Use this to fine-tune the visual placement of the car body (slide it left/right/forward/up so it "sits" in the same spot in the frame as other teams).
+// Separate from TEAM_TARGET_CENTER_OFFSETS (which controls the rotation pivot without moving the geometry).
+// Edit Mercedes and click RESET in viewer to test.
 const TEAM_POSITION_OFFSETS = {
   'McLaren': { x: 0, y: 0, z: 0 },
   'Red Bull': { x: 0, y: 0, z: 0 },
   'Aston Martin': { x: 0, y: 0, z: 0 },
-  'Mercedes': { x: 0, y: 0, z: 0 },  // <-- fine-tune this for Mercedes origin offset
+  'Mercedes': { x: -50, y: 30, z: -90},  // <-- fine-tune this for Mercedes origin offset
+  'Ferrari': { x: 0, y: 0, z: 0 },
+  'Alpine': { x: 0, y: 0, z: 0 },
+};
+
+// Separate per-team adjustment for the *orbit target / camera framing center* (the point around which the view rotates).
+// This shifts the OrbitControls target and the center used for camera positioning in auto-framing.
+// It does NOT move the model itself (use TEAM_POSITION_OFFSETS for that).
+// Ideal for making the car "rotate along its axis" the same way as other models — e.g. if Mercedes' source origin
+// makes the geometric center not align with the visual/rotation center that McLaren/Red Bull use.
+// Edit the Mercedes values, then click RESET (or change team and back) in the 3D viewer to test. Small increments recommended.
+// Units are post-normalization (after rot + bbox center + ground).
+const TEAM_TARGET_CENTER_OFFSETS = {
+  'McLaren': { x: 0, y: 0, z: 0 },
+  'Red Bull': { x: 0, y: 0, z: 0 },
+  'Aston Martin': { x: 0, y: 0, z: 0 },
+  'Mercedes': { x: 0, y: 0, z: 0 },  // <-- main knob for making rotation feel the same as other models
   'Ferrari': { x: 0, y: 0, z: 0 },
   'Alpine': { x: 0, y: 0, z: 0 },
 };
@@ -92,17 +108,17 @@ const TEAM_POSITION_OFFSETS = {
 // Static summary for validation (see console on first customizer load)
 // Note: values below are the live ones from the *consts* above (user can edit TEAM_* maps for fine-tuning).
 const MODEL_INTEGRATION_SUMMARY = {
-  'McLaren': { file: 'f1_2025_mclaren_mcl39/scene.gltf', adjustments: `rot=${JSON.stringify(TEAM_ROTATIONS['McLaren'])}, scaleMult=${TEAM_SCALE_MULT['McLaren']}, posOffset=${JSON.stringify(TEAM_POSITION_OFFSETS['McLaren'])}, bbox-center+ground` },
-  'Red Bull': { file: 'f1-2025_redbull_rb21/scene.gltf', adjustments: `rot=${JSON.stringify(TEAM_ROTATIONS['Red Bull'])}, scaleMult=${TEAM_SCALE_MULT['Red Bull']}, posOffset=${JSON.stringify(TEAM_POSITION_OFFSETS['Red Bull'])}, bbox-center+ground (user-tuned scale/rot)` },
-  'Aston Martin': { file: 'aston_martin_aramco_amr25/scene.gltf', adjustments: `rot=${JSON.stringify(TEAM_ROTATIONS['Aston Martin'])}, scaleMult=${TEAM_SCALE_MULT['Aston Martin']}, posOffset=${JSON.stringify(TEAM_POSITION_OFFSETS['Aston Martin'])}, bbox-center+ground` },
-  'Mercedes': { file: 'f1_mercedes_w13_concept/scene.gltf', adjustments: `rot=${JSON.stringify(TEAM_ROTATIONS['Mercedes'])}, scaleMult=${TEAM_SCALE_MULT['Mercedes']}, posOffset=${JSON.stringify(TEAM_POSITION_OFFSETS['Mercedes'])}, bbox-center+ground (tune posOffset to fix origin offset)` },
-  'Ferrari': { file: 'ferrari_sf-25/scene.gltf', adjustments: `rot=${JSON.stringify(TEAM_ROTATIONS['Ferrari'])}, scaleMult=${TEAM_SCALE_MULT['Ferrari']}, posOffset=${JSON.stringify(TEAM_POSITION_OFFSETS['Ferrari'])}, bbox-center+ground` },
-  'Alpine': { file: '2025_alpine_a525/scene.gltf', adjustments: `rot=${JSON.stringify(TEAM_ROTATIONS['Alpine'])}, scaleMult=${TEAM_SCALE_MULT['Alpine']}, posOffset=${JSON.stringify(TEAM_POSITION_OFFSETS['Alpine'])}, bbox-center+ground` },
+  'McLaren': { file: 'f1_2025_mclaren_mcl39/scene.gltf', adjustments: `rot=${JSON.stringify(TEAM_ROTATIONS['McLaren'])}, scaleMult=${TEAM_SCALE_MULT['McLaren']}, posOffset=${JSON.stringify(TEAM_POSITION_OFFSETS['McLaren'])}, targetCenterAdj=${JSON.stringify(TEAM_TARGET_CENTER_OFFSETS['McLaren'])}, bbox-center+ground` },
+  'Red Bull': { file: 'f1-2025_redbull_rb21/scene.gltf', adjustments: `rot=${JSON.stringify(TEAM_ROTATIONS['Red Bull'])}, scaleMult=${TEAM_SCALE_MULT['Red Bull']}, posOffset=${JSON.stringify(TEAM_POSITION_OFFSETS['Red Bull'])}, targetCenterAdj=${JSON.stringify(TEAM_TARGET_CENTER_OFFSETS['Red Bull'])}, bbox-center+ground (user-tuned scale/rot)` },
+  'Aston Martin': { file: 'aston_martin_aramco_amr25/scene.gltf', adjustments: `rot=${JSON.stringify(TEAM_ROTATIONS['Aston Martin'])}, scaleMult=${TEAM_SCALE_MULT['Aston Martin']}, posOffset=${JSON.stringify(TEAM_POSITION_OFFSETS['Aston Martin'])}, targetCenterAdj=${JSON.stringify(TEAM_TARGET_CENTER_OFFSETS['Aston Martin'])}, bbox-center+ground` },
+  'Mercedes': { file: 'f1_mercedes_w13_concept/scene.gltf', adjustments: `rot=${JSON.stringify(TEAM_ROTATIONS['Mercedes'])}, scaleMult=${TEAM_SCALE_MULT['Mercedes']}, posOffset=${JSON.stringify(TEAM_POSITION_OFFSETS['Mercedes'])}, targetCenterAdj=${JSON.stringify(TEAM_TARGET_CENTER_OFFSETS['Mercedes'])}, bbox-center+ground (use targetCenterAdj to tune rotation pivot/axis to match others; posOffset to align body placement)` },
+  'Ferrari': { file: 'ferrari_sf-25/scene.gltf', adjustments: `rot=${JSON.stringify(TEAM_ROTATIONS['Ferrari'])}, scaleMult=${TEAM_SCALE_MULT['Ferrari']}, posOffset=${JSON.stringify(TEAM_POSITION_OFFSETS['Ferrari'])}, targetCenterAdj=${JSON.stringify(TEAM_TARGET_CENTER_OFFSETS['Ferrari'])}, bbox-center+ground` },
+  'Alpine': { file: '2025_alpine_a525/scene.gltf', adjustments: `rot=${JSON.stringify(TEAM_ROTATIONS['Alpine'])}, scaleMult=${TEAM_SCALE_MULT['Alpine']}, posOffset=${JSON.stringify(TEAM_POSITION_OFFSETS['Alpine'])}, targetCenterAdj=${JSON.stringify(TEAM_TARGET_CENTER_OFFSETS['Alpine'])}, bbox-center+ground` },
 };
 
 /** Normalize a model's orientation, center, and ground plane so all team cars present identically (automatic part).
- *  Additional per-team TEAM_POSITION_OFFSETS are applied only to the final rendered model (not the framing temp)
- *  so you can slide the visual car body to line up with other teams while the camera framing/target stays "neutral".
+ *  TEAM_POSITION_OFFSETS (model body placement) and TEAM_TARGET_CENTER_OFFSETS (orbit pivot/rotation axis) 
+ *  are applied after this for per-team fine tuning. Target center affects framing + controls.target for rotation feel.
  */
 function normalizeOrientationAndCenter(obj, team = 'McLaren') {
   if (!obj || !obj.isObject3D) return;
@@ -349,7 +365,11 @@ function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', 
         console.log('All teams use same BASE_MODEL_SCALE + dynamic bbox framing + normalize (center/ground/orient + TEAM_POSITION_OFFSETS for fine-tune) + identical OrbitControls + camera presets.');
         console.log('Issues discovered: (1) Part names for classify/hover/click are McLaren-centric so may be incomplete on other models (e.g. tyres/wings may still tag via broad keywords). (2) Some rots/scales/offsets are best-guess and may need visual tweak via the TEAM_* consts. (3) Livery tint only on McLaren; others use baked team textures (correct). (4) No models were missing after copy.');
         console.log('Fallback: if primary 404/ fail, auto uses McLaren + warn logged.');
-        console.log('To fine-tune Mercedes (or others): edit TEAM_POSITION_OFFSETS["Mercedes"] = {x:0,y:0,z:0}, save, reload. Offset is applied only to the rendered model (camera framing stays neutral/bbox-centered). Tune until the Mercedes car body visually lines up with the others in the default framed view. Ground plane is at y≈-0.05; large y offsets may require also tweaking the ground mesh position.');
+        console.log('To fine-tune Mercedes (or others):');
+        console.log('  - TEAM_POSITION_OFFSETS["Mercedes"] moves the car body (placement in view).');
+        console.log('  - TEAM_TARGET_CENTER_OFFSETS["Mercedes"] shifts the orbit target / rotation center (the "axis" the car rotates around during mouse drag / presets). This is likely what you need for "rotate along its axis the same".');
+        console.log('Edit either (or both), SAVE, then click the RESET button in the 3D toolbar (or switch driver and back) to re-apply framing with new values. The target one keeps the camera math neutral while choosing a better pivot point on the car.');
+        console.log('Ground plane ≈ y=-0.05. Use external glTF viewer (e.g. https://gltf-viewer.donmccurdy.com/) or Blender on the Mercedes scene.gltf to inspect its RootNode / Body_low transform and estimate offsets from center.');
       }
     }
     if (usingFallback) {
@@ -583,9 +603,16 @@ function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', 
     const temp = gltf.scene.clone();
     normalizeOrientationAndCenter(temp, team);
     const box = new THREE.Box3().setFromObject(temp);
-    const center = box.getCenter(new THREE.Vector3());
+    let center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z);
+
+    // Apply target center adjustment (shifts the rotation pivot / orbit center without moving the model).
+    // This is the key for making "rotate along its axis" feel consistent across models.
+    const targetAdj = TEAM_TARGET_CENTER_OFFSETS[team] || { x: 0, y: 0, z: 0 };
+    center.x += (targetAdj.x || 0);
+    center.y += (targetAdj.y || 0);
+    center.z += (targetAdj.z || 0);
 
     // Effective scale the model will have in the scene (base tuned for this export + current user zoom)
     const scaleMult = TEAM_SCALE_MULT[team] || 1;
