@@ -3,7 +3,12 @@
 **AI-assisted Formula 1 race strategy simulation and analysis platform**  
 DHA Suffa University — Final Year Project
 
-**Team:** Ebad Ahmed (Dataset processing & feature engineering) • Fatima Ather Rajput (Research analysis & data compilation) • Zaafir Ejaz (Telemetry collection & ML pipeline)  
+**Team**
+
+- **Zaafir Ejaz** — Telemetry collection & ML pipeline
+- **Ebad Ahmed** — Dataset processing & feature engineering
+- **Fatima Ather Rajput** — Research analysis & data compilation
+
 **Supervisor:** Dr. Huma Jamshed
 
 [GitHub](https://github.com/szy-cmd/stratbot) • [Live Demo (frontend prototype)](https://stratbot-fyp.netlify.app)
@@ -260,9 +265,9 @@ Open http://localhost:5173 .
 
 ## Team Responsibilities (from SDS)
 
-- Zaafir Ejaz — Telemetry collection, ML pipeline
-- Ebad Ahmed — Dataset processing, feature engineering
-- Fatima Ather — Research analysis, data compilation
+- **Zaafir Ejaz** — Telemetry collection & ML pipeline
+- **Ebad Ahmed** — Dataset processing & feature engineering
+- **Fatima Ather Rajput** — Research analysis & data compilation
 
 ## References
 

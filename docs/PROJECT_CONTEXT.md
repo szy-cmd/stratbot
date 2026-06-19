@@ -235,7 +235,7 @@ Open http://127.0.0.1:5173/ → Boot → Setup → Start Race → see ML panel.
 |--------|-------|
 | Zaafir Ejaz | Telemetry collection, ML pipeline |
 | Ebad Ahmed | Dataset processing, feature engineering |
-| Fatima Ather | Research analysis, data compilation |
+| Fatima Ather Rajput | Research analysis, data compilation |
 
 ## 14. Change log
 
