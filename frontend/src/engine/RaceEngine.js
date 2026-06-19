@@ -41,6 +41,8 @@ const DEFAULT_CONFIG = {
   totalLaps: TOTAL_LAPS,
   trackedDriver: 'VER',
   trackId: 'buddhism-svgfind-com',
+  useMLDeltas: false,  // FYP-II: feed live ML LapDelta predictions to influence pace/tyre/fuel
+  dataMode: 'mock',    // 'mock' | 'ml-enhanced' | 'historical' (for real Parquet slices)
 };
 
 /** Race commentary templates — filled with live data each lap */
@@ -207,6 +209,10 @@ export function useRaceEngine() {
   const [fastForward, setFastForward] = useState(false);
   const fastForwardRef = useRef(false);
 
+  const currentMLDeltaRef = useRef(0);  // FYP-II: current LapDelta from ML to influence sim
+  const useMLDeltasRef = useRef(false);
+  const dataModeRef = useRef('mock');
+
   const nextDecisionIndexRef = useRef(0);
   const rafRef = useRef(null);
   const lastTickRef = useRef(0);
@@ -263,6 +269,11 @@ export function useRaceEngine() {
 
       lapProgress += progressDelta + (Math.random() - 0.5) * 0.01;
       lapTime += (Math.random() - 0.5) * LAP_TIME_WIGGLE;
+      // FYP-II: integrate live-predicted ML LapDelta to affect pace (positive = slower lap)
+      if (useMLDeltasRef.current && currentMLDeltaRef.current) {
+        lapTime += currentMLDeltaRef.current * 0.7;  // scale influence
+        lapTime = Math.max(70, Math.min(90, lapTime));
+      }
       lapTime = Math.max(75, Math.min(82, lapTime));
 
       const wx = WEATHER_PRESETS[configRef.current.weather] || WEATHER_PRESETS.clear;
@@ -395,6 +406,8 @@ export function useRaceEngine() {
     configRef.current = cfg;
     totalLapsRef.current = cfg.totalLaps;
     decisionLapsRef.current = ALL_DECISION_LAPS.filter((l) => l <= cfg.totalLaps);
+    useMLDeltasRef.current = !!cfg.useMLDeltas;
+    dataModeRef.current = cfg.dataMode || 'mock';
     setRaceConfig(cfg);
 
     trackedIdRef.current = cfg.trackedDriver;
@@ -448,6 +461,11 @@ export function useRaceEngine() {
     setMlPredictions((prev) => [...prev.slice(-50), { ...pred, lap: pred.lap || (driversRef.current?.[0]?.lap ?? 0), ts: Date.now() }]);
   }, []);
 
+  // FYP-II: feed live-predicted LapDelta into simulation to influence pace, tyre, etc.
+  const setCurrentMLDelta = useCallback((delta) => {
+    currentMLDeltaRef.current = parseFloat(delta) || 0;
+  }, []);
+
   return {
     drivers,
     paused,
@@ -473,5 +491,7 @@ export function useRaceEngine() {
     totalLaps: totalLapsRef.current,
     mlPredictions,
     recordPrediction,
+    setCurrentMLDelta,  // for ML integration into sim
+    useMLDeltas: useMLDeltasRef.current,
   };
 }

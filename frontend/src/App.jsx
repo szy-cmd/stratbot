@@ -44,6 +44,15 @@ function App() {
     }
   }, [phase, stratBot.prediction, trackedDriver?.lap, race.raceConfig, race.recordPrediction]);
 
+  // FYP-II: feed live ML LapDelta into simulation engine to influence pace/tyre/fuel
+  useEffect(() => {
+    if (phase === PHASE.RACING && race.setCurrentMLDelta && race.raceConfig?.useMLDeltas) {
+      if (stratBot.prediction && stratBot.prediction.lap_delta_seconds != null) {
+        race.setCurrentMLDelta(stratBot.prediction.lap_delta_seconds);
+      }
+    }
+  }, [phase, stratBot.prediction, race.setCurrentMLDelta, race.raceConfig?.useMLDeltas]);
+
   /* ── Phase transitions ── */
   const onBootComplete = useCallback(() => setPhase(PHASE.SETUP), []);
 

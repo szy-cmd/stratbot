@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { DRIVERS, TRACK_OPTIONS } from '../data/mockRaceState';
+import { login as apiLogin, logout as apiLogout } from '../services/stratbotApi';
 
 const WEATHER_OPTIONS = [
   {
@@ -72,6 +73,29 @@ export function PreRaceSetup({ onStart }) {
   const [trackId, setTrackId] = useState('buddhism-svgfind-com');
   const [compound, setCompound] = useState('medium');
   const [modelVariant, setModelVariant] = useState('base'); // base | weather | rf (for experimentation with our trained models)
+  const [useMLDeltas, setUseMLDeltas] = useState(true); // FYP-II: feed live-predicted deltas into sim engine
+  const [dataMode, setDataMode] = useState('mock'); // 'mock' | 'ml-enhanced' | 'historical' (Parquet slices)
+
+  // FYP-II simple auth demo
+  const [authUser, setAuthUser] = useState(null);
+  const [loginUser, setLoginUser] = useState('student');
+  const [loginPass, setLoginPass] = useState('fyp2026');
+  const [loginError, setLoginError] = useState('');
+
+  const handleLogin = async () => {
+    setLoginError('');
+    try {
+      const res = await apiLogin(loginUser, loginPass);
+      setAuthUser(res.user);
+    } catch (e) {
+      setLoginError(e.message || 'Login failed (try student/fyp2026 or admin/stratbot2026)');
+    }
+  };
+
+  const handleLogout = () => {
+    apiLogout();
+    setAuthUser(null);
+  };
 
   const handleStart = () => {
     const raceConfig = RACE_TYPE_OPTIONS.find((r) => r.id === raceType);
@@ -83,6 +107,8 @@ export function PreRaceSetup({ onStart }) {
       trackId,
       compound,
       modelVariant,
+      useMLDeltas,
+      dataMode,
     });
   };
 
@@ -98,6 +124,26 @@ export function PreRaceSetup({ onStart }) {
             CONFIGURE YOUR SESSION PARAMETERS
           </p>
         </div>
+
+        {/* FYP-II: Simple User Auth (SRS) - demo login */}
+        <Section title="User Login (FYP-II)" index={0}>
+          {!authUser ? (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input value={loginUser} onChange={e => setLoginUser(e.target.value)} placeholder="username" className="px-2 py-1 bg-black/30 border border-f1-border text-sm" />
+                <input type="password" value={loginPass} onChange={e => setLoginPass(e.target.value)} placeholder="password" className="px-2 py-1 bg-black/30 border border-f1-border text-sm" />
+                <button onClick={handleLogin} className="px-3 py-1 bg-f1-accent text-black text-sm">Login</button>
+              </div>
+              {loginError && <div className="text-red-400 text-xs">{loginError}</div>}
+              <div className="text-[10px] text-gray-500">Demo: student/fyp2026 (user) or admin/stratbot2026 (admin for retrain)</div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 text-sm">
+              Logged in as <span className="font-mono text-f1-accent">{authUser.username}</span> ({authUser.role})
+              <button onClick={handleLogout} className="text-xs underline">Logout</button>
+            </div>
+          )}
+        </Section>
 
         {/* Weather */}
         <Section title="Weather Conditions" index={1}>
@@ -227,6 +273,69 @@ export function PreRaceSetup({ onStart }) {
           <p className="mt-2 text-[10px] text-gray-600 text-center">
             Select which trained model powers the live LapDelta predictions. Weather-aware uses data from our pipeline experiments.
           </p>
+        </Section>
+
+        {/* FYP-II Admin (if logged as admin) */}
+        {authUser?.role === 'admin' && (
+          <Section title="Admin Controls (FYP-II)" index={8}>
+            <div className="flex gap-2 text-sm">
+              <button
+                onClick={async () => {
+                  try {
+                    const r = await fetch((import.meta.env.VITE_API_BASE || '') + '/api/admin/retrain', { method: 'POST' });
+                    const data = await r.json();
+                    alert('Retrain result: ' + JSON.stringify(data).slice(0, 200));
+                  } catch (e) { alert('Admin call failed (is backend running?)'); }
+                }}
+                className="px-3 py-1 border border-f1-accent"
+              >
+                Trigger Model Retrain
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    const r = await fetch((import.meta.env.VITE_API_BASE || '') + '/api/admin/refresh-dataset', { method: 'POST' });
+                    const data = await r.json();
+                    alert('Refresh: ' + JSON.stringify(data));
+                  } catch (e) { alert('Admin call failed'); }
+                }}
+                className="px-3 py-1 border border-f1-accent"
+              >
+                Refresh Dataset (stub)
+              </button>
+            </div>
+            <p className="text-[10px] text-gray-500 mt-1">Admin actions require valid admin login. Retrain runs the full pipeline (slow).</p>
+          </Section>
+        )}
+
+        {/* FYP-II: ML Integration into Simulation */}
+        <Section title="Simulation Mode (FYP-II)" index={7}>
+          <div className="flex flex-col gap-3">
+            <label className="flex items-center gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={useMLDeltas}
+                onChange={(e) => setUseMLDeltas(e.target.checked)}
+                className="w-4 h-4"
+              />
+              <span>Use live ML LapDelta predictions to influence pace, tyre wear & fuel (realistic sim sync)</span>
+            </label>
+            <div>
+              <div className="text-xs text-gray-400 mb-1">Data Mode</div>
+              <div className="flex gap-2 text-sm">
+                {['mock', 'ml-enhanced', 'historical'].map(m => (
+                  <button
+                    key={m}
+                    onClick={() => setDataMode(m)}
+                    className={`px-3 py-1 rounded border ${dataMode === m ? 'bg-f1-accent text-black' : 'border-f1-border'}`}
+                  >
+                    {m === 'mock' ? 'Mock' : m === 'ml-enhanced' ? 'ML-Enhanced' : 'Historical Parquet'}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-gray-500 mt-1">Historical uses real slices from the F1 parquet (future: full integration).</p>
+            </div>
+          </div>
         </Section>
 
         {/* Launch */}

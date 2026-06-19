@@ -181,16 +181,16 @@ React + Vite + Tailwind. App phases: `BOOT → SETUP → RACING → POST_RACE`.
 **Local dev:** http://127.0.0.1:5173/  
 **Netlify demo:** https://stratbot-fyp.netlify.app (mock only until API deployed)
 
-## 10. Integration work remaining
+## 10. Integration work remaining (FYP-II progress)
 
-1. ~~Finalize best model~~ — **Done: LightGBM**
+1. ~~Finalize best model~~ — **Done (now with weather in all models)**
 2. ~~Wire `/api/predict`~~ — **Done**
 3. ~~Frontend ML panel~~ — **Done: ModelInsightsPanel**
-4. **Replace mock race data** — feed real Parquet slices into simulation engine
-5. **Simulation sync** — use ML LapDelta to influence tyre/fuel/pace in RaceEngine
-6. **Auth module** — register/login per SRS (PostgreSQL planned for FYP-II)
-7. **Admin panel** — dataset refresh, model retrain triggers
-8. **Deploy API** — host Flask alongside Netlify frontend for live demo
+4. **Replace mock race data / Simulation sync** — **In progress**: `useMLDeltas` + `dataMode` in PreRaceSetup + RaceEngine. Live ML deltas now influence pace/tyre/fuel. Historical Parquet slices stubbed (full load from backend next).
+5. **Auth module** — **Done (demo)**: Login in PreRaceSetup (student/admin), token auth in API, /api/auth/* . Saved strategies stub in PostRace.
+6. **Admin panel** — **Done (demo)**: Admin-only retrain/refresh endpoints + buttons in UI (if admin login).
+7. **Deploy API** — **Partial**: Added backend/Dockerfile + deploy notes in README. (Netlify frontend + Render/Heroku for Flask).
+8. **Advanced predictors + RL** — **Stubs**: /api/predict/tyre-deg , /pit-window , /strategy/rl-agent . Full RL (on parquet) per SDS papers planned.
 
 ## 11. Data schema (SDS reference)
 

@@ -193,6 +193,14 @@ export function PostRaceSummary({ drivers, peakSpeed, highlightsLog, telemetryHi
           AI Model Results & Comparison
         </div>
 
+        {/* FYP-II Advanced stubs */}
+        <div className="mb-4 text-xs">
+          <button onClick={() => alert('Tyre deg stub - extend predictor for real model')} className="mr-2 px-2 py-0.5 border">Predict Tyre Deg</button>
+          <button onClick={() => alert('Pit window stub')} className="mr-2 px-2 py-0.5 border">Pit Window</button>
+          <button onClick={() => alert('RL agent stub - see /api/strategy/rl-agent')} className="px-2 py-0.5 border">RL Strategy Agent</button>
+          <span className="ml-2 text-gray-400">(FYP-II: real models + RL per SDS papers)</span>
+        </div>
+
         {/* Variant & Conditions */}
         <div className="mb-4 text-sm text-gray-300">
           {mlPredictions?.length > 0 ? (

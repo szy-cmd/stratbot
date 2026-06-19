@@ -277,3 +277,13 @@ Open http://localhost:5173 .
 *README updated June 2026 to fully document the completed work, the model selection journey, exact MAE results, pipeline that produced the parquet-output folder, and strict use of the shared venv for all Python execution (J: drive only).*
 
 *See `docs/TESTING.md` for the complete evaluation story and graph gallery.*
+
+## FYP-II Progress & Deployment Notes (Remaining Work)
+
+- **Real data into sim**: Added `useMLDeltas` + `dataMode` in PreRaceSetup and RaceEngine. ML predictions now influence lap pace in the simulation (FYP-II core).
+- **Auth + saved strategies**: Simple login in PreRaceSetup (demo users: student/fyp2026, admin/stratbot2026). Token passed to API. Strategies can be extended to save in PostRace (local for now).
+- **Admin**: If admin login, retrain/refresh buttons call /api/admin/* (retrain runs train_export; stub for dataset).
+- **Deploy**: See backend/Dockerfile. For public: deploy Flask (Render free tier works with gunicorn), frontend to Netlify. Set VITE_API_BASE in frontend env.
+- Advanced (pit, tyre, RL): Stubs in predictor and engine; full RL agent planned per SDS papers.
+
+See SRS/SDS for full scope.
