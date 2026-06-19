@@ -114,6 +114,8 @@ View on GitHub after push — images render inline in this document and in `PROJ
 
 ### Model dashboards
 
+![Latest benchmark (16 features incl. weather data - current RF production winner)](evaluation/graphs/latest_weather_included_benchmark.png)
+
 ![XGBoost dashboard](evaluation/graphs/xgboost_master_dashboard.png)
 
 ![LightGBM dashboard](evaluation/graphs/lgbm_blue_dashboard.png)
