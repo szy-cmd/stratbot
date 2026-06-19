@@ -217,7 +217,11 @@ export function PreRaceSetup({ onStart }) {
               <button
                 key={d.id}
                 type="button"
-                onClick={() => setTrackedDriver(d.id)}
+                onClick={() => {
+                  setTrackedDriver(d.id);
+                  // Reset car stats for new driver (team-specific defaults)
+                  setCarStats({ compound: 'medium', initialTyreWear: 0, aeroLevel: 5, powerLevel: 5 });
+                }}
                 className={`setup-card flex items-center gap-2 px-3 py-3 ${trackedDriver === d.id ? 'selected' : ''}`}
               >
                 <span
