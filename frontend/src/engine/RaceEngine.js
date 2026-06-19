@@ -351,8 +351,9 @@ export function useRaceEngine() {
 
     /* Write to ref first, then trigger React render */
     driversRef.current = sorted;
-    // During fast complete, only update UI state every 5 laps or at end to keep it fast
-    if (!isFastCompletingRef.current || (newLeaderLap % 5 === 0) || (newLeaderLap > totalLapsRef.current)) {
+    // During fast complete, update UI state every 2 laps (so the overlay lap counter visibly advances/"goes by")
+    // + always at end. This makes the loading feel alive instead of frozen.
+    if (!isFastCompletingRef.current || (newLeaderLap % 2 === 0) || (newLeaderLap > totalLapsRef.current)) {
       setDrivers(sorted);
     }
 
@@ -558,20 +559,23 @@ export function useRaceEngine() {
         setIsFastCompleting(false);
         return;
       }
-      // Advance many ticks quickly (500 ticks per burst to finish full race almost instantly)
-      for (let i = 0; i < 500; i++) {
+      // Advance many ticks quickly (~120 ticks = few laps per burst so overlay lap counter visibly "goes by")
+      for (let i = 0; i < 120; i++) {
         tick();
         if (raceFinishedRef.current) break;
       }
-      // Schedule next burst very soon (5ms) if needed; the lap in overlay will update rapidly
+      // Schedule next burst soon (10ms); keeps UI responsive enough to show updating progress in overlay
       if (!raceFinishedRef.current) {
-        setTimeout(runFastBurst, 5);
+        setTimeout(runFastBurst, 10);
       } else {
         isFastCompletingRef.current = false;
         setIsFastCompleting(false);
       }
     };
-    runFastBurst();
+    // Yield to React first so the isFastCompleting overlay (with "Fast-forwarding..." text + progress)
+    // is painted before we start the blocking burst work. This ensures the loading indicator is visible
+    // instead of jumping straight to a black screen or post-race (even if post has its own issues).
+    setTimeout(runFastBurst, 16);
   }, [tick]);  // tick is stable from useCallback([])
 
   return {

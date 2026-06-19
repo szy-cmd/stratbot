@@ -21,7 +21,7 @@ const WEATHER_EFFECTS = {
  * Post-Race Telemetry Dashboard — shown after race completes or endSimulation.
  * Displays: session info, final standings, comparative telemetry graphs, stats, highlights.
  */
-export function PostRaceSummary({ drivers, peakSpeed, highlightsLog, telemetryHistory, raceConfig, onReset, mlPredictions = [] }) {
+export function PostRaceSummary({ drivers, peakSpeed, highlightsLog, telemetryHistory, raceConfig, onReset, mlPredictions = [], trackedDriverId = null }) {
   const avgTireWear = drivers.length
     ? drivers.reduce((sum, d) => sum + d.tireWear, 0) / drivers.length
     : 0;
@@ -251,7 +251,7 @@ export function PostRaceSummary({ drivers, peakSpeed, highlightsLog, telemetryHi
         {/* FYP-II: Your Team's Custom Car for the Specific Driver - realistic results */}
         {raceConfig?.carStats && (
           <div className="mb-4 rounded border border-f1-accent/60 bg-black/20 p-3">
-            <div className="font-display text-xs uppercase text-f1-accent mb-2">Your Team Strategy for {drivers[0]?.name || 'Tracked Driver'}'s Car</div>
+            <div className="font-display text-xs uppercase text-f1-accent mb-2">Your Team Strategy for {(drivers.find(d => d.id === trackedDriverId) || drivers[0])?.name || 'Tracked Driver'}'s Car</div>
             <div className="grid grid-cols-2 gap-x-4 text-xs text-gray-300">
               <div>Compound: <span className="text-white font-mono">{raceConfig.carStats.compound}</span></div>
               <div>Initial Tyre Wear: <span className="text-white font-mono">{raceConfig.carStats.initialTyreWear || 0}%</span></div>
@@ -260,7 +260,7 @@ export function PostRaceSummary({ drivers, peakSpeed, highlightsLog, telemetryHi
             </div>
             <div className="mt-2 text-[10px] text-gray-400">
               These realistic team decisions (for this driver's car/setup) directly impacted the simulation: custom deg/speed/fuel for your driver + ML predictions used the stats for accurate LapDelta.
-              {trackedDriverId && telemetryHistory.tireWear?.length > 0 && (
+              {telemetryHistory?.tireWear?.length > 1 && (
                 <> Final tyre wear for your car: ~{telemetryHistory.tireWear[telemetryHistory.tireWear.length-1]?.wear?.toFixed(1)}%</>
               )}
             </div>

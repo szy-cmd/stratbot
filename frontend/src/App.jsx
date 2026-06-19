@@ -110,6 +110,7 @@ function App() {
             raceConfig={race.raceConfig}
             onReset={onNewRace}
             mlPredictions={race.mlPredictions}
+            trackedDriverId={race.trackedDriverId}
           />
         </main>
       </div>
