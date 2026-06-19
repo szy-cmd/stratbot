@@ -41,7 +41,11 @@ export function useStratBotModel({ driver, lap, totalLaps, raceConfig, enabled =
       stint: (driver.pitStops ?? 0) + 1,
       weather: raceConfig?.weather || 'clear',
       variant: raceConfig?.modelVariant || 'base',
-      race_weather: raceConfig?.weather,
+      air_temp_avg: undefined,  // will use weather bias in predictor
+      track_temp_avg: undefined,
+      humidity_avg: undefined,
+      wind_speed_avg: undefined,
+      rainfall_max: undefined,
     })
       .then((result) => {
         setPrediction(result);

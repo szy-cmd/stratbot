@@ -10,6 +10,12 @@ FEATURES = [
     "DRS_max",
     "FuelProxy",
     "DriverDelta",
+    # Weather features - now included in ALL trained models (from pipeline merge + historical experiments)
+    "AirTemp_Avg",
+    "TrackTemp_Avg",
+    "Humidity_Avg",
+    "WindSpeed_Avg",
+    "Rainfall_Max",
 ]
 
 TARGET = "LapDelta"

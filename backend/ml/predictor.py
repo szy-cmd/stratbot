@@ -42,20 +42,20 @@ class LapDeltaPredictor:
             {
                 "id": "base",
                 "name": m["model_name"],
-                "description": "Production model (11 features, no weather)",
+                "description": "Production model (16 features *including* weather data from pipeline)",
                 "mae": m["metrics"]["mae"],
-            },
-            {
-                "id": "weather",
-                "name": f"{m['model_name']} + Weather",
-                "description": "Weather-aware variant (includes AirTemp_Avg, TrackTemp_Avg, Humidity_Avg, WindSpeed_Avg, Rainfall_Max from pipeline experiments)",
-                "mae": 0.95,  # Approximate from our weather experiment dashboards (often similar/better in specific conditions)
             },
             {
                 "id": "rf",
                 "name": "Random Forest",
-                "description": "Alternative from benchmark (for comparison)",
-                "mae": 1.0510,
+                "description": "RF (current winner from full weather training)",
+                "mae": 1.0202,
+            },
+            {
+                "id": "xgb",
+                "name": "XGBoost",
+                "description": "XGB from the same 16-feature weather training run",
+                "mae": 1.5323,
             },
         ]
         return {
@@ -67,7 +67,7 @@ class LapDeltaPredictor:
             "holdout_year": m.get("holdout_year", 2025),
             "trained_at": m.get("trained_at"),
             "available_variants": variants,
-            "weather_note": "Weather data was collected in pipeline and used in several experiment models (see docs/evaluation/graphs/*-weather*.png). Prod base set excludes it for simplicity/speed.",
+            "weather_note": "Weather data (AirTemp_Avg, TrackTemp_Avg, Humidity_Avg, WindSpeed_Avg, Rainfall_Max) is NOW INCLUDED IN *EVERY* MODEL TRAINED (see constants.py). Production training always uses the full 16 features from the weather-enriched parquet.",
         }
 
     def _build_row(self, payload: dict) -> dict:
@@ -88,6 +88,15 @@ class LapDeltaPredictor:
         if lap_time is not None:
             driver_delta = float(lap_time) - 78.0
 
+        # Weather bias from sim choice (ensures live predictions account for the selected weather)
+        # Weather features are now in EVERY trained model (see constants.py)
+        weather = str(payload.get("weather", "clear")).lower()
+        wx_bias = {
+            "clear": {"AirTemp_Avg": 25.0, "TrackTemp_Avg": 35.0, "Humidity_Avg": 50.0, "WindSpeed_Avg": 1.5, "Rainfall_Max": 0.0},
+            "overcast": {"AirTemp_Avg": 20.0, "TrackTemp_Avg": 28.0, "Humidity_Avg": 65.0, "WindSpeed_Avg": 2.0, "Rainfall_Max": 0.0},
+            "rainy": {"AirTemp_Avg": 17.0, "TrackTemp_Avg": 22.0, "Humidity_Avg": 85.0, "WindSpeed_Avg": 3.5, "Rainfall_Max": 1.0},
+        }.get(weather, {"AirTemp_Avg": 23.62, "TrackTemp_Avg": 35.52, "Humidity_Avg": 54.11, "WindSpeed_Avg": 1.54, "Rainfall_Max": 0.0})
+
         row = {
             "TyreLife": float(tyre_life if tyre_life is not None else medians["TyreLife"]),
             "Speed_mean": float(payload.get("speed_mean", medians["Speed_mean"])),
@@ -100,6 +109,12 @@ class LapDeltaPredictor:
             "DRS_max": float(payload.get("drs_max", medians["DRS_max"])),
             "FuelProxy": float(payload.get("fuel_proxy", total_laps - lap_number)),
             "DriverDelta": float(payload.get("driver_delta", driver_delta)),
+            # Weather features - always provided now (median or weather-biased for live sim)
+            "AirTemp_Avg": float(payload.get("air_temp_avg", wx_bias["AirTemp_Avg"])),
+            "TrackTemp_Avg": float(payload.get("track_temp_avg", wx_bias["TrackTemp_Avg"])),
+            "Humidity_Avg": float(payload.get("humidity_avg", wx_bias["Humidity_Avg"])),
+            "WindSpeed_Avg": float(payload.get("wind_speed_avg", wx_bias["WindSpeed_Avg"])),
+            "Rainfall_Max": float(payload.get("rainfall_max", wx_bias["Rainfall_Max"])),
         }
         return row
 
@@ -120,17 +135,15 @@ class LapDeltaPredictor:
         }.get(weather, {"delta_adj": 0.0, "label": "Clear"})
 
         if variant in ("weather", "weather-aware", "weather_aware"):
-            # For weather variant demo: base + adjustment from presets (reflects our weather experiment models)
-            # In real, this would load a separate weather-trained artifact (we have experiment scripts + dashboards for them)
             prediction = base_prediction + wx["delta_adj"]
-            used_model_name = f"{self.meta['model_name']} + Weather"
+            used_model_name = f"{self.meta['model_name']} (weather-biased)"
             weather_considered = True
-            variant_note = f"Weather-aware variant (adjustment for {wx['label']} conditions from trained experiments)"
+            variant_note = f"Weather-biased for {wx['label']} (all production models now include weather features)"
         else:
             prediction = base_prediction
             used_model_name = self.meta["model_name"]
-            weather_considered = False
-            variant_note = "Base production model (no weather features in final 11-feature set)"
+            weather_considered = True  # always, now that every trained model includes it
+            variant_note = "Base production model (weather data *always* included in the 16-feature training set)"
 
         actual = payload.get("actual_lap_delta")
         error = None

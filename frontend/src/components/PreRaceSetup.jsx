@@ -60,9 +60,9 @@ const COMPOUND_OPTIONS = [
 ];
 
 const MODEL_VARIANT_OPTIONS = [
-  { id: 'base', label: 'Base (LGBM)', desc: 'Production 11-feature model (fast, no weather)', mae: '0.9683s' },
-  { id: 'weather', label: 'Weather-aware (LGBM)', desc: 'Uses Air/Track temp, humidity, wind, rain from our pipeline experiments', mae: '~0.95s' },
-  { id: 'rf', label: 'Random Forest', desc: 'Alternative benchmark model for comparison', mae: '1.051s' },
+  { id: 'base', label: 'Base (RF winner)', desc: 'Production 16-feature model *with weather data always included*', mae: '1.0202s' },
+  { id: 'rf', label: 'Random Forest', desc: 'The current production winner (uses weather)', mae: '1.0202s' },
+  { id: 'xgb', label: 'XGBoost', desc: 'XGB from same training run (uses weather)', mae: '1.5323s' },
 ];
 
 export function PreRaceSetup({ onStart }) {

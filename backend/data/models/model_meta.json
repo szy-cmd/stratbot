@@ -1,5 +1,5 @@
 {
-  "model_name": "LightGBM",
+  "model_name": "RandomForest",
   "target": "LapDelta",
   "features": [
     "TyreLife",
@@ -12,7 +12,12 @@
     "CompoundCode",
     "DRS_max",
     "FuelProxy",
-    "DriverDelta"
+    "DriverDelta",
+    "AirTemp_Avg",
+    "TrackTemp_Avg",
+    "Humidity_Avg",
+    "WindSpeed_Avg",
+    "Rainfall_Max"
   ],
   "feature_medians": {
     "TyreLife": 14.0,
@@ -25,28 +30,33 @@
     "CompoundCode": 1.0,
     "DRS_max": 0.0,
     "FuelProxy": 30.0,
-    "DriverDelta": 0.0
+    "DriverDelta": 0.0,
+    "AirTemp_Avg": 23.62,
+    "TrackTemp_Avg": 35.52,
+    "Humidity_Avg": 54.11,
+    "WindSpeed_Avg": 1.54,
+    "Rainfall_Max": 0.0
   },
   "metrics": {
-    "mae": 0.9683039979294908,
-    "rmse": 1.6259991654664971
+    "mae": 1.0201567117761738,
+    "rmse": 1.7175962395801805
   },
   "benchmark": {
     "LightGBM": {
-      "mae": 0.9683039979294908,
-      "rmse": 1.6259991654664971
+      "mae": 1.5550136149686176,
+      "rmse": 2.0268762336954724
     },
     "XGBoost": {
-      "mae": 1.0186714043088745,
-      "rmse": 1.7293998256885452
+      "mae": 1.5323357052566835,
+      "rmse": 2.038794960987315
     },
     "RandomForest": {
-      "mae": 1.0510217847118624,
-      "rmse": 1.8619793937556073
+      "mae": 1.0201567117761738,
+      "rmse": 1.7175962395801805
     }
   },
   "holdout_year": 2025,
-  "trained_at": "2026-06-18T22:50:42.995328+00:00",
+  "trained_at": "2026-06-19T00:18:17.094700+00:00",
   "train_rows": 123763,
   "test_rows": 17889
 }

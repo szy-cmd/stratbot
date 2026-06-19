@@ -12,6 +12,36 @@ DHA Suffa University — Final Year Project
 
 ---
 
+## Quick Start (Easiest Way)
+
+**Just double-click this file:**
+
+```
+stratbot\start-stratbot.bat
+```
+
+The launcher is now more robust (added early debug pauses + venv existence checks) so the window won't just flash open and close.
+
+It will:
+- Use the correct shared venv Python
+- Install backend requirements if needed
+- Train the production model automatically if it's missing
+- Open two new command windows (Backend API + Frontend dev server)
+
+Then open **http://localhost:5173** in your browser.
+
+**If the window still closes immediately**, run it from an already-open command prompt like this:
+```
+cmd /k "J:\FYP_Project\stratbot\start-stratbot.bat"
+```
+This keeps the console open so you can read any errors.
+
+In Setup you can now choose **Model Variant** (Base / Weather-aware / RF), Starting Compound, and Weather — exactly the experimentation features we added.
+
+See the "Easiest way to run everything" section below for more details and what the new Post-Race ML comparison shows.
+
+---
+
 ## What We Built
 
 StratBot delivers the core of the SRS requirements for the **AI Prediction Module** and **Strategy Simulation Module**, together with the data pipeline and storage design specified in the SDS for FYP-I:
@@ -55,7 +85,7 @@ Reproduce the pipeline (see exact commands in the Setup section below; always us
 **Goal:** Predict **LapDelta** — how much faster or slower a lap was versus the median lap time for that specific Grand Prix round. Lower error = better tracking of real performance differences.
 
 **Dataset:** `f1_model_ready_2018_2025.parquet` (2018–2025 seasons).  
-**Engineered features (final 11):** `TyreLife`, `Speed_mean`, `RPM_mean`, `Brake_mean`, `Speed_max`, `LapNumber`, `Stint`, `CompoundCode`, `DRS_max`, `FuelProxy`, `DriverDelta`.
+**Engineered features (final 16, weather always included in training):** `TyreLife`, `Speed_mean`, `RPM_mean`, `Brake_mean`, `Speed_max`, `LapNumber`, `Stint`, `CompoundCode`, `DRS_max`, `FuelProxy`, `DriverDelta`, `AirTemp_Avg`, `TrackTemp_Avg`, `Humidity_Avg`, `WindSpeed_Avg`, `Rainfall_Max`.
 
 **Evaluation protocol (designed to mimic real deployment):**
 - Train: everything before 2025 → 123,763 rows
@@ -67,21 +97,21 @@ We ran both:
 1. An automated, reproducible benchmark (`backend/ml/train_export.py`) that trains LightGBM / XGBoost / RandomForest on the exact same split and records everything in `model_meta.json`.
 2. Many individual detailed experiments (legacy scripts under `backend/models/`) that produced rich visual dashboards (feature importance, predicted-vs-actual, residuals, etc.).
 
-### Production Results (from `model_meta.json`, June 2026 retrain)
+### Production Results (from `model_meta.json` after latest retrain with weather)
 
 | Rank | Model         | MAE (s)    | RMSE (s)   |
 |------|---------------|------------|------------|
-| 1 ★  | **LightGBM**  | **0.9683** | **1.6260** |
-| 2    | XGBoost       | 1.0187     | 1.7294     |
-| 3    | Random Forest | 1.0510     | 1.8620     |
+| 1 ★  | **Random Forest** | **1.0202** | **1.7176** |
+| 2    | XGBoost       | 1.5323     | 2.0388     |
+| 3    | LightGBM      | 1.5550     | 2.0269     |
 
-**Winner & production model: LightGBM**
+**Winner & production model: Random Forest (now with all 16 features including weather)**
 
-### Why LightGBM? (The reasoning process)
-- Lowest MAE in the automated benchmark **and** across the broader set of manual experiments (including weather-augmented variants and other algorithms: CatBoost, TabNet, SVR, Huber, TFT).
-- Fast inference — essential for the live polling performed by the frontend (`useStratBotModel` calls the API every 8 seconds during a race).
-- Good balance of accuracy, training speed, and operational simplicity (no GPU required at inference time, unlike the deep learning experiments).
-- Weather features improved some models in the experimental dashboards but were not included in the final 11-feature production set (data availability + complexity trade-off for the live system).
+### Why Random Forest this time? (The reasoning process)
+- Lowest MAE in the automated benchmark when training **every model on the full 16-feature set that includes weather data** (AirTemp_Avg etc. from the pipeline).
+- RF benefited from the additional weather signals in this run (previous 11-feature runs had LGBM on top).
+- Still fast enough for live 8s polling.
+- Weather is now *always* used in training (no more "base without weather" -- fulfills the requirement that every model we train incorporates the weather data we collected).
 
 Full details, per-model scripts, and the complete graph gallery live in:
 - [docs/TESTING.md](docs/TESTING.md)
@@ -149,50 +179,52 @@ Predictions are captured during the race and shown in an enhanced **PostRaceSumm
 
 The simulation engine itself remains mock-data driven (as scoped); the ML component is additive and non-breaking but now deeply comparable. Performance fixes (internal fluctuation for leaderboard, memoized panels, decoupled visuals) reduce glitchy refreshes on updates.
 
-## Getting Started (Important: Use the Shared Venv + J: Drive Only)
+## Getting Started (Use the Easy Launcher!)
 
-**Python must always be invoked via the shared environment:**
+**The simplest way is the dedicated launcher (see Quick Start section at the top of this README):**
+
+```bat
+stratbot\start-stratbot.bat
+```
+
+The launcher now includes extra debug output and pauses so it won't just flash and close on problems.
+
+It automatically handles:
+- Correct venv python/pip
+- Dependency installation (if needed)
+- Model training (if `lap_delta_model.joblib` is missing)
+- Opening separate windows for Backend + Frontend
+
+**If it still disappears immediately**, run from an open cmd/pwsh:
+```
+cmd /k "J:\FYP_Project\stratbot\start-stratbot.bat"
+```
+
+### Manual commands (if you prefer)
+
+**Python must always be invoked via the shared environment** (this is required so we stay on approved J: drive content):
 
 ```
 J:\FYP_Project\.venv\Scripts\python.exe
 J:\FYP_Project\.venv\Scripts\pip.exe
 ```
 
-This ensures consistent packages and that we only operate on approved J: drive content.
-
-### 1. Backend
+Typical manual steps (first time):
 
 ```bat
+:: Backend deps
 cd J:\FYP_Project\stratbot\backend
-
-:: Install deps (using the project venv pip)
 J:\FYP_Project\.venv\Scripts\pip.exe install -r requirements.txt
 
-:: (Optional but recommended) Copy and edit env for the dataset location
-copy .env.example .env
-:: Edit .env and point STRATBOT_DATASET at your copy of the parquet if needed
-```
-
-### 2. Train / Regenerate the Production Model (first time after clone)
-
-```bat
+:: Train model (only needed once or after deleting the .joblib)
 J:\FYP_Project\.venv\Scripts\python.exe -m ml.train_export
-```
 
-This reads the Parquet (default J:\F1 location or your .env override), retrains the three candidates, picks the best (LightGBM), and writes:
-- `data/models/lap_delta_model.joblib` (gitignored)
-- `data/models/model_meta.json` (tracked — contains exact MAE numbers, features, medians, etc.)
-
-### 3. Start the Inference API
-
-```bat
+:: Start API (keep this running)
 cd api
 J:\FYP_Project\.venv\Scripts\python.exe app.py
 ```
 
-Server runs at http://127.0.0.1:5000 .
-
-### 4. Frontend
+In another terminal:
 
 ```bat
 cd J:\FYP_Project\stratbot\frontend
@@ -202,7 +234,7 @@ npm run dev
 
 Open http://localhost:5173 .
 
-**To see live ML predictions:** Keep the API running. Start a race (Boot → Setup → Start Race). The ModelInsightsPanel will show real-time LapDelta from the model.
+**Tip:** The launcher (`start-stratbot.bat`) does all of the above for you in the correct order.
 
 ## Reproducibility & Verification
 

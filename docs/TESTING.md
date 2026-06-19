@@ -16,9 +16,9 @@ Evaluate multiple regression models for predicting **LapDelta** — the deviatio
 | Storage | Parquet (FastF1 pipeline output) |
 | Target | `LapDelta` = `LapTimeSeconds` − median lap time per `(year, round)` |
 
-### Engineered features (11)
+### Engineered features (16 - weather data now used in *every* trained model)
 
-`TyreLife`, `Speed_mean`, `RPM_mean`, `Brake_mean`, `Speed_max`, `LapNumber`, `Stint`, `CompoundCode`, `DRS_max`, `FuelProxy`, `DriverDelta`
+`TyreLife`, `Speed_mean`, `RPM_mean`, `Brake_mean`, `Speed_max`, `LapNumber`, `Stint`, `CompoundCode`, `DRS_max`, `FuelProxy`, `DriverDelta`, `AirTemp_Avg`, `TrackTemp_Avg`, `Humidity_Avg`, `WindSpeed_Avg`, `Rainfall_Max`
 
 Weather-enriched experiments also used: `AirTemp_Avg`, `TrackTemp_Avg`, `Humidity_Avg`, `WindSpeed_Avg`, `Rainfall_Max` where available.
 
@@ -45,9 +45,9 @@ From `backend/data/models/model_meta.json` (June 2026 retrain on full feature se
 
 | Rank | Model | MAE (s) | RMSE (s) |
 |------|-------|---------|----------|
-| 1 ★ | **LightGBM** | **0.9683** | **1.6260** |
-| 2 | XGBoost | 1.0187 | 1.7294 |
-| 3 | Random Forest | 1.0510 | 1.8620 |
+| 1 ★ | **Random Forest** | **1.0202** | **1.7176** |
+| 2 | XGBoost | 1.5323 | 2.0388 |
+| 3 | LightGBM | 1.5550 | 2.0269 |
 
 **Production model:** LightGBM (`lap_delta_model.joblib`)
 
@@ -133,7 +133,7 @@ View on GitHub after push — images render inline in this document and in `PROJ
 ## 8. Known limitations
 
 - Holdout is 2025 only; earlier seasons may have schema differences across FastF1 API versions.
-- Weather features improve some models but were not in the final 11-feature production set.
+- Weather features are now always included in production training (16-feature set). Older experiment dashboards (pre-inclusion) are still in the graphs folder for reference.
 - TabNet and TFT require GPU/time; not selected for production API due to MAE vs inference speed trade-off.
 - Frontend simulation still uses mock race data; ML panel is additive and does not yet drive `RaceEngine.js`.
 - Model binary (`lap_delta_model.joblib`) is gitignored; run `train_export` after clone.

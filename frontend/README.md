@@ -16,14 +16,29 @@ The ML insights panel is additive (polls the Flask API during races) and does no
 - Dark F1 broadcast-style theme (Tailwind + custom F1 colors), smooth transitions, phases: BOOT → SETUP → RACING → POST_RACE
 - Full backend integration: Vite proxy to Flask :5000 for live predictions during simulation
 
-## Run
+## Run (Recommended)
+
+The easiest way is to use the project launcher from the parent `stratbot` folder:
+
+```bat
+stratbot\start-stratbot.bat
+```
+
+The launcher has been improved with debug pauses and checks so the window no longer just flashes open and closes. It starts both the backend API and the frontend dev server for you.
+
+**If the bat still closes too fast**, run it like this from an open terminal:
+```
+cmd /k "J:\FYP_Project\stratbot\start-stratbot.bat"
+```
+
+### Manual
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open `http://localhost:5173`.
+Open `http://localhost:5173`. (Make sure the backend is already running on :5000 for live ML features.)
 
 ## Build
 
