@@ -146,7 +146,7 @@ function App() {
 
         {/* FYP-II fast complete loading overlay - shows while sim runs to end at high speed to let user see full results after "loading" */}
         {race.isFastCompleting && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70">
             <div className="rounded-xl border border-amber-400 bg-f1-panel p-8 text-center shadow-2xl">
               <div className="mb-4 text-2xl font-display text-amber-400">Fast-forwarding full simulation...</div>
               <div className="mb-2 text-sm text-gray-400">Advancing remaining laps as fast as possible to compute final results.</div>
@@ -154,6 +154,7 @@ function App() {
               <div className="mt-4 h-2 w-64 overflow-hidden rounded bg-gray-800">
                 <div className="h-full bg-amber-400 transition-all" style={{width: `${Math.min(100, ((race.drivers[0]?.lap ?? 1) / race.totalLaps) * 100)}%` }} />
               </div>
+              <div className="mt-2 text-xs text-gray-500">This will take a moment but simulates the entire remaining race instantly.</div>
             </div>
           </div>
         )}

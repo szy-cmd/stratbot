@@ -179,23 +179,47 @@ function sortAndRank(drivers) {
 }
 
 export function useRaceEngine() {
-  /* --- refs initialized once via useState initializer (safe in StrictMode) --- */
+  /* --- all refs first to avoid TDZ in initializers --- */
   const driversRef = useRef(null);
+  const startedRef = useRef(false);
+  const raceFinishedRef = useRef(false);
+  const configRef = useRef(DEFAULT_CONFIG);
+  const totalLapsRef = useRef(TOTAL_LAPS);
+  const decisionLapsRef = useRef(ALL_DECISION_LAPS);
+  const trackedIdRef = useRef(DEFAULT_CONFIG.trackedDriver);
+  const fastForwardRef = useRef(false);
+  const currentMLDeltaRef = useRef(0);
+  const useMLDeltasRef = useRef(false);
+  const dataModeRef = useRef('mock');
+  const customCarStatsRef = useRef(null);
+  const isFastCompletingRef = useRef(false);
+  const nextDecisionIndexRef = useRef(0);
+  const rafRef = useRef(null);
+  const lastTickRef = useRef(0);
+  const tickCountRef = useRef(0);
+  const peakSpeedsRef = useRef({});
+  const allTelemetryRef = useRef(null);
+
+  /* --- state --- */
   const [drivers, setDrivers] = useState(() => {
     const initial = sortAndRank(buildInitialDrivers());
     driversRef.current = initial;
     return initial;
   });
 
-  const [started, setStarted] = useState(false);   // idle until startRace()
-  const [paused, setPaused] = useState(true);       // starts paused
+  const [started, setStarted] = useState(() => {
+    startedRef.current = false;
+    return false;
+  });
+  const [paused, setPaused] = useState(true);
   const [decisionIndex, setDecisionIndex] = useState(-1);
   const [slowing, setSlowing] = useState(false);
-  const [raceFinished, setRaceFinished] = useState(false);
+  const [raceFinished, setRaceFinished] = useState(() => {
+    raceFinishedRef.current = false;
+    return false;
+  });
+
   const [raceConfig, setRaceConfig] = useState(DEFAULT_CONFIG);
-  const configRef = useRef(DEFAULT_CONFIG);
-  const totalLapsRef = useRef(TOTAL_LAPS);
-  const decisionLapsRef = useRef(ALL_DECISION_LAPS);
 
   /* Telemetry state */
   const [telemetryHistory, setTelemetryHistory] = useState({
@@ -208,26 +232,9 @@ export function useRaceEngine() {
   /* ML predictions captured during race for post-race analysis & comparison (variant + weather aware) */
   const [mlPredictions, setMlPredictions] = useState([]);
   const [trackedDriverId, setTrackedDriverIdState] = useState(DEFAULT_CONFIG.trackedDriver);
-  const trackedIdRef = useRef(DEFAULT_CONFIG.trackedDriver);
   const [fastForward, setFastForward] = useState(false);
-  const fastForwardRef = useRef(false);
 
   const [isFastCompleting, setIsFastCompleting] = useState(false);
-
-  const currentMLDeltaRef = useRef(0);  // FYP-II: current LapDelta from ML to influence sim
-  const useMLDeltasRef = useRef(false);
-  const dataModeRef = useRef('mock');
-
-  const customCarStatsRef = useRef(null); // FYP-II: per-driver custom stats from 3D customizer (tyre, aero, power)
-
-  const isFastCompletingRef = useRef(false); // for full sim fast forward with loading
-
-  const nextDecisionIndexRef = useRef(0);
-  const rafRef = useRef(null);
-  const lastTickRef = useRef(0);
-  const tickCountRef = useRef(0);
-  const peakSpeedsRef = useRef({});
-  const allTelemetryRef = useRef(null);
   const lastLeaderLapRef = useRef(1);
 
   /* Lazy-init per-driver telemetry ref */
@@ -311,25 +318,27 @@ export function useRaceEngine() {
       );
 
       if (lapProgress >= 100) {
-        lapProgress -= 100;
-        lap += 1;
-        totalRaceTime += lapTime;
-        lapTime = LAP_TIME_BASE + (Math.random() - 0.5) * 2;
-        // FYP-II: apply custom car stats for tracked driver (realistic team strategy for specific driver)
-        let tireDegMult = wx.tireDeg;
-        let fuelMult = wx.fuelMult;
-        const isTracked = d.id === trackedIdRef.current;
-        if (isTracked && d.customStats) {
-          const cs = d.customStats;
-          const aeroFactor = 1 - (cs.aeroLevel - 5) / 30; // high aero = less deg
-          tireDegMult *= Math.max(0.7, aeroFactor);
-          const powerFactor = cs.powerLevel / 5;
-          fuelMult *= powerFactor;
-        }
-        tireWear = Math.max(0, tireWear - (TIRE_DEG_PER_LAP * tireDegMult) - Math.random() * 0.5);
-        fuel = Math.max(0, fuel - (FUEL_PER_LAP * fuelMult) - (Math.random() - 0.3) * 0.4);
+        while (lapProgress >= 100) {
+          lapProgress -= 100;
+          lap += 1;
+          totalRaceTime += lapTime;
+          lapTime = LAP_TIME_BASE + (Math.random() - 0.5) * 2;
+          // FYP-II: apply custom car stats for tracked driver (realistic team strategy for specific driver)
+          let tireDegMult = wx.tireDeg;
+          let fuelMult = wx.fuelMult;
+          const isTracked = d.id === trackedIdRef.current;
+          if (isTracked && d.customStats) {
+            const cs = d.customStats;
+            const aeroFactor = 1 - (cs.aeroLevel - 5) / 30; // high aero = less deg
+            tireDegMult *= Math.max(0.7, aeroFactor);
+            const powerFactor = cs.powerLevel / 5;
+            fuelMult *= powerFactor;
+          }
+          tireWear = Math.max(0, tireWear - (TIRE_DEG_PER_LAP * tireDegMult) - Math.random() * 0.5);
+          fuel = Math.max(0, fuel - (FUEL_PER_LAP * fuelMult) - (Math.random() - 0.3) * 0.4);
 
-        lapCompletions.push({ id: d.id, newLap: lap });
+          lapCompletions.push({ id: d.id, newLap: lap });
+        }
       }
 
       return { ...d, lap, lapProgress, lapTime: lapTime.toFixed(2), totalRaceTime, tireWear, fuel, currentSpeed };
@@ -337,9 +346,15 @@ export function useRaceEngine() {
 
     const sorted = sortAndRank(next);
 
+    const newLeader = sorted[0];
+    const newLeaderLap = newLeader.lap;
+
     /* Write to ref first, then trigger React render */
     driversRef.current = sorted;
-    setDrivers(sorted);
+    // During fast complete, only update UI state every 5 laps or at end to keep it fast
+    if (!isFastCompletingRef.current || (newLeaderLap % 5 === 0) || (newLeaderLap > totalLapsRef.current)) {
+      setDrivers(sorted);
+    }
 
     /* --- Side-effects OUTSIDE the updater (safe in StrictMode) --- */
 
@@ -375,9 +390,7 @@ export function useRaceEngine() {
     }
 
     /* Race feed — generate per-lap commentary when leader completes a lap */
-    const newLeader = sorted[0];
-    const newLeaderLap = newLeader.lap;
-    if (newLeaderLap > lastLeaderLapRef.current) {
+    if (newLeaderLap > lastLeaderLapRef.current && !isFastCompletingRef.current) {
       lastLeaderLapRef.current = newLeaderLap;
       const evt = generateLapEvent(sorted, newLeaderLap, trackedIdRef.current, totalLapsRef.current);
       setRaceFeed((prev) => [...prev.slice(-40), evt]);
@@ -407,6 +420,7 @@ export function useRaceEngine() {
     /* Race finish */
     if (newLeaderLap > totalLapsRef.current) {
       setRaceFinished(true);
+      raceFinishedRef.current = true;
       setPaused(true);
       isFastCompletingRef.current = false;
       setIsFastCompleting(false);
@@ -414,9 +428,10 @@ export function useRaceEngine() {
   }, []);
 
   useEffect(() => {
-    if (!started || paused || raceFinished) return;
+    if (!startedRef.current || paused || raceFinishedRef.current || isFastCompletingRef.current) return;
     lastTickRef.current = performance.now();
     const loop = (now) => {
+      if (isFastCompletingRef.current) return; // fast loop handles it
       const elapsed = now - lastTickRef.current;
       if (elapsed >= TICK_MS) {
         lastTickRef.current = now;
@@ -493,12 +508,15 @@ export function useRaceEngine() {
     setFastForward(false);
     setPaused(false);
     setStarted(true);
+    startedRef.current = true;
   }, []);
 
   const reset = useCallback(() => {
     setStarted(false);
+    startedRef.current = false;
     setPaused(true);
     setRaceFinished(false);
+    raceFinishedRef.current = false;
     setDecisionIndex(-1);
     setSlowing(false);
     setMlPredictions([]);
@@ -524,14 +542,37 @@ export function useRaceEngine() {
 
   /** FYP-II: button to complete FULL SIMULATION fast (shows "loading" while advancing quickly to see final results) */
   const fastCompleteRace = useCallback(() => {
-    if (raceFinished || !started) return;
+    if (raceFinishedRef.current || !startedRef.current) return;
     isFastCompletingRef.current = true;
     setIsFastCompleting(true);
     fastForwardRef.current = true;
     setFastForward(true);
     setPaused(false);
     setSlowing(false);
-  }, [raceFinished, started]);
+
+    // Run a fast simulation loop using setTimeout bursts to complete as fast as possible
+    // without blocking the UI thread, so the loading overlay shows progress.
+    const runFastBurst = () => {
+      if (raceFinishedRef.current || !startedRef.current || !isFastCompletingRef.current) {
+        isFastCompletingRef.current = false;
+        setIsFastCompleting(false);
+        return;
+      }
+      // Advance many ticks quickly (500 ticks per burst to finish full race almost instantly)
+      for (let i = 0; i < 500; i++) {
+        tick();
+        if (raceFinishedRef.current) break;
+      }
+      // Schedule next burst very soon (5ms) if needed; the lap in overlay will update rapidly
+      if (!raceFinishedRef.current) {
+        setTimeout(runFastBurst, 5);
+      } else {
+        isFastCompletingRef.current = false;
+        setIsFastCompleting(false);
+      }
+    };
+    runFastBurst();
+  }, [tick]);  // tick is stable from useCallback([])
 
   return {
     drivers,
