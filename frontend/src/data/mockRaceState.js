@@ -181,8 +181,18 @@ export const TRACK_POSITIONS = [
   5, 15, 25, 35, 42, 52, 62, 72, 80, 88,
 ];
 
-/** Available tracks in racetrack-svgs (filename without .svg) */
+/** Available tracks. New RaceCircuit*.svg (including the better Monaco) are detailed outlines to be used for both visual and car path following. */
 export const TRACK_OPTIONS = [
+  { id: 'RaceCircuitBahrain', name: 'Bahrain' },
+  { id: 'RaceCircuitMonaco', name: 'Monaco' },
+  { id: 'RaceCircuitCatalunya', name: 'Catalunya' },
+  { id: 'RaceCircuitSilverstone', name: 'Silverstone' },
+  { id: 'RaceCircuitSuzuka', name: 'Suzuka' },
+  { id: 'RaceCircuitAutodromaDiMonza', name: 'Monza' },
+  { id: 'RaceCircuitInterlagos', name: 'Interlagos' },
+  { id: 'RaceCircuitAbuDhabi', name: 'Abu Dhabi' },
+  { id: 'Spa-FrancorchampsRaceCircuitSpa', name: 'Spa' },
+  // previous detailed
   { id: 'buddhism-svgfind-com', name: 'Buddhism' },
   { id: 'grand prix-svgfind-com', name: 'Grand Prix' },
   { id: 'prenoes dijon-svgfind-com', name: 'Prenoes Dijon' },

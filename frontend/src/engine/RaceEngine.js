@@ -355,9 +355,9 @@ export function useRaceEngine() {
 
     /* Write to ref first, then trigger React render */
     driversRef.current = sorted;
-    // During fast complete, update UI state every 2 laps (so the overlay lap counter visibly advances/"goes by")
-    // + always at end. This makes the loading feel alive instead of frozen.
-    if (!isFastCompletingRef.current || (newLeaderLap % 2 === 0) || (newLeaderLap > totalLapsRef.current)) {
+    // During fast complete, update UI state every lap (so the overlay lap counter visibly advances smoothly).
+    // + always at end. Smaller bursts above ensure it feels like accurate ongoing simulation.
+    if (!isFastCompletingRef.current || (newLeaderLap % 1 === 0) || (newLeaderLap > totalLapsRef.current)) {
       setDrivers(sorted);
     }
 
@@ -579,30 +579,36 @@ export function useRaceEngine() {
     setPaused(false);
     setSlowing(false);
 
-    // Run a fast simulation loop using setTimeout bursts to complete as fast as possible
-    // without blocking the UI thread, so the loading overlay shows progress.
+    // Run a fast simulation loop using setTimeout bursts.
+    // IMPORTANT: Previously too aggressive (120 sync ticks + 10ms) which made it feel instantaneous
+    // and "not simulating". Now: smaller bursts (8 ticks ~1 lap), longer yield (33ms) so the full
+    // 57-lap race takes ~2-4 visible seconds with the overlay lap counter visibly advancing lap-by-lap.
+    // All physics (progress, tire deg, fuel, speed profile, lap completions, telemetry refs, lapHistory)
+    // still execute fully and accurately in every tick() call. Auto-resolve only affects UI narrative
+    // (picks best-prob branch for post-race report) — core race sim is unchanged.
+    const TICKS_PER_BURST = 8;
+    const BURST_INTERVAL_MS = 33;
     const runFastBurst = () => {
       if (raceFinishedRef.current || !startedRef.current || !isFastCompletingRef.current) {
         isFastCompletingRef.current = false;
         setIsFastCompleting(false);
         return;
       }
-      // Advance many ticks quickly (~120 ticks = few laps per burst so overlay lap counter visibly "goes by")
-      for (let i = 0; i < 120; i++) {
+      // Smaller burst so UI (overlay lap progress) updates frequently and feels like real sim running.
+      for (let i = 0; i < TICKS_PER_BURST; i++) {
         tick();
         if (raceFinishedRef.current) break;
       }
-      // Schedule next burst soon (10ms); keeps UI responsive enough to show updating progress in overlay
+      // Yield longer to give browser time to paint the updated lap counter / drivers in overlay.
       if (!raceFinishedRef.current) {
-        setTimeout(runFastBurst, 10);
+        setTimeout(runFastBurst, BURST_INTERVAL_MS);
       } else {
         isFastCompletingRef.current = false;
         setIsFastCompleting(false);
       }
     };
     // Yield to React first so the isFastCompleting overlay (with "Fast-forwarding..." text + progress)
-    // is painted before we start the blocking burst work. This ensures the loading indicator is visible
-    // instead of jumping straight to a black screen or post-race (even if post has its own issues).
+    // is painted before we start the bursts. This ensures the loading indicator is visible.
     setTimeout(runFastBurst, 16);
   }, [tick]);  // tick is stable from useCallback([])
 

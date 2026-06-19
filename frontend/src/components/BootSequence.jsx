@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useGLTF } from '@react-three/drei';
 
 const BOOT_LINES = [
   { text: 'F1 STRATEGY ENGINE v3.2.1', delay: 0, type: 'header' },
@@ -12,11 +13,12 @@ const BOOT_LINES = [
   { text: '[OK] Tire degradation model v2.8 loaded', delay: 2700, type: 'ok' },
   { text: '[OK] Fuel consumption matrix initialized', delay: 3000, type: 'ok' },
   { text: '[OK] Weather prediction module active', delay: 3200, type: 'ok' },
-  { text: '────────────────────────────────────', delay: 3500, type: 'divider' },
-  { text: 'ALL SYSTEMS NOMINAL — READY TO RACE', delay: 3700, type: 'ready' },
+  { text: '[OK] 3D F1 car models preloading (6 teams: McLaren, Red Bull, Aston, Mercedes, Ferrari, Alpine)', delay: 3400, type: 'ok' },
+  { text: '────────────────────────────────────', delay: 3700, type: 'divider' },
+  { text: 'ALL SYSTEMS NOMINAL — READY TO RACE', delay: 3900, type: 'ready' },
 ];
 
-const TOTAL_DURATION = 4400;
+const TOTAL_DURATION = 4600;
 
 export function BootSequence({ onComplete }) {
   const [visibleLines, setVisibleLines] = useState(0);
@@ -25,6 +27,26 @@ export function BootSequence({ onComplete }) {
   const startRef = useRef(performance.now());
 
   useEffect(() => {
+    // Preload all 3D models during the boot sequence so they are cached when the user reaches
+    // PreRaceSetup + CarCustomizer (prevents "Loading detailed..." spinners and makes 3D instant).
+    // useGLTF.preload uses the global drei cache; safe to call outside Canvas.
+    const modelUrls = [
+      '/models/f1_2025_mclaren_mcl39/scene.gltf',
+      '/models/f1-2025_redbull_rb21/scene.gltf',
+      '/models/aston_martin_aramco_amr25/scene.gltf',
+      '/models/f1_mercedes_w14_free/scene.gltf',
+      '/models/ferrari_sf-25/scene.gltf',
+      '/models/2025_alpine_a525/scene.gltf',
+    ];
+    modelUrls.forEach((url) => {
+      try {
+        useGLTF.preload(url);
+      } catch (e) {
+        // non-fatal; model will lazy-load later if needed
+        console.warn('[Boot] 3D preload skipped for', url, e);
+      }
+    });
+
     const timers = BOOT_LINES.map((line, i) =>
       setTimeout(() => setVisibleLines(i + 1), line.delay)
     );
@@ -62,13 +84,27 @@ export function BootSequence({ onComplete }) {
   return (
     <div className={`fixed inset-0 z-50 flex items-center justify-center bg-f1-dark hud-grid ${fading ? 'animate-fade-out' : ''}`}>
       <div className="w-full max-w-xl px-6">
-        {/* Logo */}
+        {/* Logo - matching the simulation part branding for consistency on first page */}
         <div className="mb-8 text-center animate-fade-in">
-          <div className="font-display text-3xl font-bold tracking-widest text-white mb-1">
-            F1 STRATEGY
-          </div>
-          <div className="font-display text-sm tracking-[0.3em] text-f1-accent">
-            DASHBOARD
+          <div className="flex flex-col items-center">
+            <div className="flex items-baseline gap-2">
+              <a
+                href="https://github.com/szy-cmd/stratbot"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-400 hover:text-white transition-colors mt-1"
+                title="View source on GitHub"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+                </svg>
+              </a>
+              <span className="font-display text-3xl font-black tracking-[3px] text-f1-accent hover:bg-f1-panel/40 hover:text-white px-1 -mx-1 rounded transition-colors">STRATBOT</span>
+              <span className="font-display text-xl font-bold tracking-wider text-white hover:bg-f1-panel/40 hover:text-f1-accent px-1 -mx-1 rounded transition-colors">F1 STRATEGY DASHBOARD</span>
+            </div>
+            <div className="text-[9px] font-mono tracking-[0.5px] text-white/85 font-medium mt-1">
+              ZAAFIR EJAZ (CS221222) • EBAD AHMED (CS221217) • FATIMA ATHER RAJPUT (CS221270)
+            </div>
           </div>
         </div>
 

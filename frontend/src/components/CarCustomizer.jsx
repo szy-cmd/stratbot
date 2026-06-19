@@ -1,19 +1,15 @@
 import React, { useState, useEffect, Suspense, useRef } from 'react';
 import { useThree } from '@react-three/fiber';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Environment, Html } from '@react-three/drei';
+import { OrbitControls, Environment, Html, useTexture } from '@react-three/drei';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 
 /**
  * Interactive 3D F1 Car visualizer / customizer (STRATBOT).
- * ENHANCED: Detailed procedural F1 geometry (front/rear wings multi-element, halo, sidepods,
- * diffuser, proper proportions, suspension) + PBR MeshStandardMaterial.
- * Optional GLTF path: place modern F1 .glb (e.g. from Meshy.ai free CC0 "F1 low poly" or
- * exported 2022 Pixel Lab model) at /public/models/f1-car.glb and set MODEL_URL below.
- * Stats drive live updates (tyre wear/compound scale+color, wing angle from aero, engine glow from power, body color from team).
+ * Uses unpacked glTF + separate textures from 3d models folder for live material/part tweaks.
+ * Stats drive live updates (tyre wear/compound, wing angle from aero, engine glow from power, body color from team).
  * Clickable parts + sliders. Affects sim physics + ML LapDelta.
- * Designed for FYP demos / presentations: realistic from all angles, premium lighting.
  */
 
 const COMPOUNDS = ['soft', 'medium', 'hard'];
@@ -36,7 +32,7 @@ const PART_HINTS = {
   mirrors: 'Side mirrors.',
 };
 
-// Team to model folder mapping (unpacked glTF preferred for customizations)
+// Team to model folder mapping (unpacked glTF + separate textures for live tweaks).
 // All models copied to frontend/public/models/<key>/
 const TEAM_MODEL_MAP = {
   'McLaren': 'f1_2025_mclaren_mcl39',
@@ -56,17 +52,15 @@ function getModelUrlForTeam(team) {
   return `/models/${key}/scene.gltf`;
 }
 
-// Per-team rotation (radians) to normalize orientation so nose faces consistent direction (typically -Z for front-3/4 view with current dir vector), +Y up.
 const TEAM_ROTATIONS = {
   'McLaren': { x: 0, y: 0, z: 0 },
-  'Red Bull': { x: 0, y: 0, z: 0 }, // often exported facing opposite
+  'Red Bull': { x: 0, y: 0, z: 0 },
   'Aston Martin': { x: 0, y: 0, z: 0 },
   'Mercedes': { x: 0, y: 0, z: 0 },
   'Ferrari': { x: 0, y: 0, z: 0 },
   'Alpine': { x: 0, y: 0, z: 0 },
 };
 
-// Fine-tune overall visual scale if bbox-based framing alone doesn't make cars feel identical in presence (rarely needed).
 const TEAM_SCALE_MULT = {
   'McLaren': 1.0,
   'Red Bull': 4.0,
@@ -76,62 +70,95 @@ const TEAM_SCALE_MULT = {
   'Alpine': 1.0,
 };
 
-// Per-team additional position offset (applied AFTER bbox centering + ground alignment, only to rendered model).
-// Use this to fine-tune the visual placement of the car body (slide it left/right/forward/up so it "sits" in the same spot in the frame as other teams).
-// Separate from TEAM_TARGET_CENTER_OFFSETS (which controls the rotation pivot without moving the geometry).
-// Edit Mercedes and click RESET in viewer to test.
 const TEAM_POSITION_OFFSETS = {
   'McLaren': { x: 0, y: 0, z: 0 },
   'Red Bull': { x: 0, y: 0, z: 0 },
   'Aston Martin': { x: 0, y: 0, z: 0 },
-  'Mercedes': { x: 0, y: 0, z: 0 }, // new W14 model - use offsets for fine tuning if origin needs adjustment
+  'Mercedes': { x: 0, y: 0, z: 0 },
   'Ferrari': { x: 0, y: 0, z: 0 },
   'Alpine': { x: 0, y: 0, z: 0 },
 };
 
-// Separate per-team adjustment for the *orbit target / camera framing center* (the point around which the view rotates).
-// This shifts the OrbitControls target and the center used for camera positioning in auto-framing.
-// It does NOT move the model itself (use TEAM_POSITION_OFFSETS for that).
-// Ideal for making the car "rotate along its axis" the same way as other models — e.g. if Mercedes' source origin
-// makes the geometric center not align with the visual/rotation center that McLaren/Red Bull use.
-// Edit the Mercedes values, then click RESET (or change team and back) in the 3D viewer to test. Small increments recommended.
-// Units are post-normalization (after rot + bbox center + ground).
 const TEAM_TARGET_CENTER_OFFSETS = {
   'McLaren': { x: 0, y: 0, z: 0 },
   'Red Bull': { x: 0, y: 0, z: 0 },
   'Aston Martin': { x: 0, y: 0, z: 0 },
-  'Mercedes': { x: 0, y: 0, z: 0 }, // new W14 free model - tune if needed
+  'Mercedes': { x: 0, y: 0, z: 0 },
   'Ferrari': { x: 0, y: 0, z: 0 },
   'Alpine': { x: 0, y: 0, z: 0 },
 };
 
-// Per-team sign for Z coordinate after normalization to determine "front".
-// -1 means negative Z values are "front" parts (standard for most after our rots).
-// Set to +1 for a model if front parts have positive Z (causes front wing labeled rear, front tire as exhaust etc.).
 const TEAM_FRONT_Z_SIGN = {
   'McLaren': -1,
-  'Red Bull': 1,   // set to +1 to fix front tires being treated as rear (exhaust)
+  'Red Bull': 1,
   'Aston Martin': -1,
-  'Mercedes': 1,   // flipped from symptom "front wing mislabeled as rear"
+  'Mercedes': 1,
   'Ferrari': -1,
   'Alpine': -1,
 };
 
-// Static summary for validation (see console on first customizer load)
-// Note: values below are the live ones from the *consts* above (user can edit TEAM_* maps for fine-tuning).
 const MODEL_INTEGRATION_SUMMARY = {
-  'McLaren': { file: 'f1_2025_mclaren_mcl39/scene.gltf', adjustments: `rot=${JSON.stringify(TEAM_ROTATIONS['McLaren'])}, scaleMult=${TEAM_SCALE_MULT['McLaren']}, posOffset=${JSON.stringify(TEAM_POSITION_OFFSETS['McLaren'])}, targetCenterAdj=${JSON.stringify(TEAM_TARGET_CENTER_OFFSETS['McLaren'])}, bbox-center+ground` },
-  'Red Bull': { file: 'f1-2025_redbull_rb21/scene.gltf', adjustments: `rot=${JSON.stringify(TEAM_ROTATIONS['Red Bull'])}, scaleMult=${TEAM_SCALE_MULT['Red Bull']}, posOffset=${JSON.stringify(TEAM_POSITION_OFFSETS['Red Bull'])}, targetCenterAdj=${JSON.stringify(TEAM_TARGET_CENTER_OFFSETS['Red Bull'])}, bbox-center+ground (user-tuned scale/rot)` },
-  'Aston Martin': { file: 'aston_martin_aramco_amr25/scene.gltf', adjustments: `rot=${JSON.stringify(TEAM_ROTATIONS['Aston Martin'])}, scaleMult=${TEAM_SCALE_MULT['Aston Martin']}, posOffset=${JSON.stringify(TEAM_POSITION_OFFSETS['Aston Martin'])}, targetCenterAdj=${JSON.stringify(TEAM_TARGET_CENTER_OFFSETS['Aston Martin'])}, bbox-center+ground` },
-  'Mercedes': { file: 'f1_mercedes_w14_free/scene.gltf (user-provided mercedes_f1_w14_free model)', adjustments: `rot=${JSON.stringify(TEAM_ROTATIONS['Mercedes'])}, scaleMult=${TEAM_SCALE_MULT['Mercedes']}, posOffset=${JSON.stringify(TEAM_POSITION_OFFSETS['Mercedes'])}, targetCenterAdj=${JSON.stringify(TEAM_TARGET_CENTER_OFFSETS['Mercedes'])}, bbox-center+ground (new W14 model; start neutral, fine-tune offsets if needed for origin/pivot)` },
-  'Ferrari': { file: 'ferrari_sf-25/scene.gltf', adjustments: `rot=${JSON.stringify(TEAM_ROTATIONS['Ferrari'])}, scaleMult=${TEAM_SCALE_MULT['Ferrari']}, posOffset=${JSON.stringify(TEAM_POSITION_OFFSETS['Ferrari'])}, targetCenterAdj=${JSON.stringify(TEAM_TARGET_CENTER_OFFSETS['Ferrari'])}, bbox-center+ground` },
-  'Alpine': { file: '2025_alpine_a525/scene.gltf', adjustments: `rot=${JSON.stringify(TEAM_ROTATIONS['Alpine'])}, scaleMult=${TEAM_SCALE_MULT['Alpine']}, posOffset=${JSON.stringify(TEAM_POSITION_OFFSETS['Alpine'])}, targetCenterAdj=${JSON.stringify(TEAM_TARGET_CENTER_OFFSETS['Alpine'])}, bbox-center+ground` },
+  'McLaren': { file: 'f1_2025_mclaren_mcl39/scene.gltf' },
+  'Red Bull': { file: 'f1-2025_redbull_rb21/scene.gltf' },
+  'Aston Martin': { file: 'aston_martin_aramco_amr25/scene.gltf' },
+  'Mercedes': { file: 'f1_mercedes_w14_free/scene.gltf' },
+  'Ferrari': { file: 'ferrari_sf-25/scene.gltf' },
+  'Alpine': { file: '2025_alpine_a525/scene.gltf' },
 };
 
-/** Normalize a model's orientation, center, and ground plane so all team cars present identically (automatic part).
- *  TEAM_POSITION_OFFSETS (model body placement) and TEAM_TARGET_CENTER_OFFSETS (orbit pivot/rotation axis) 
- *  are applied after this for per-team fine tuning. Target center affects framing + controls.target for rotation feel.
- */
+// Weather-specific HDRI / panorama racetrack backgrounds (equirectangular or 360 panoramas).
+// ALL backgrounds now come from the BACKGROUNDS/ folder (user-provided).
+// Copy images from BACKGROUNDS/ into frontend/public/backgrounds/ (and dist/backgrounds/ for builds).
+// Register exact paths below in USER_HDRI_OVERRIDES or the expected names in WEATHER_HDRI.
+// Old generated racetrack-*.jpg and cyber-grid have been fully removed.
+const WEATHER_HDRI = {
+  clear: '/backgrounds/SUNNY.png',
+  overcast: '/backgrounds/CLOUDY-GPT.png',
+  rainy: '/backgrounds/RAINY-GPT.png',
+};
+
+// User's explicit overrides (for non-standard filenames).
+// The viewer prefers these and shows (custom) badge.
+const USER_HDRI_OVERRIDES = {
+  overcast: '/backgrounds/CLOUDY-GPT.png',
+  // If your sunny/rainy use different names, override here e.g.
+  // clear: '/backgrounds/SUNNY.png',
+};
+
+// Per-weather lighting and fog settings so the F1 car stays clearly visible and realistically lit in every condition.
+// Additional "car-only" lights (in practice only affect the lit PBR car meshes, since HDRI bg sphere is MeshBasicMaterial/unlit)
+// are added in WeatherLights for extra shine, specular highlights, and glimmer on paint/chrome/glass.
+const WEATHER_PRESETS = {
+  clear: {
+    name: 'Clear',
+    ambient: { intensity: 0.8, color: '#ffffff' },
+    sun: { intensity: 2.0, position: [12, 22, 4], color: '#fff5e0' },
+    accent: { intensity: 0.3, color: '#bbddff' },
+    fog: { color: '#c8d9eb', near: 95, far: 320 },
+    bgTint: '#e8e8e8',  // lighter tint now - less darkening on the sunny pano for better balance
+    envIntensity: 1.1,  // boost HDRI reflections/lighting on the car a bit
+  },
+  overcast: {
+    name: 'Overcast',
+    ambient: { intensity: 1.6, color: '#d0d8e0' },  // more boost for car visibility
+    sun: { intensity: 1.3, position: [7, 20, -2], color: '#a8b8c8' },
+    accent: { intensity: 0.4, color: '#8fa4b8' },
+    fog: { color: '#95a3b3', near: 55, far: 240 },
+    bgTint: '#c8c8c8',
+    envIntensity: 1.3,
+  },
+  rainy: {
+    name: 'Rainy',
+    ambient: { intensity: 2.8, color: '#a8b4c4' },  // much brighter for car on rainy
+    sun: { intensity: 1.8, position: [4, 16, 1], color: '#8a9ab0' },
+    accent: { intensity: 1.2, color: '#6a9cc8' },
+    fog: { color: '#5e6d7d', near: 32, far: 170 },
+    bgTint: '#a8a8a8',
+    envIntensity: 2.5,  // strong reflections from the rainy HDRI onto the car
+    rainyBgColor: '#0f1a28',  // solid dark (but not pitch black) bg for rainy ONLY - do not use the HDRI image as visual background. Tunable here.
+  },
+};
+
 function normalizeOrientationAndCenter(obj, team = 'McLaren') {
   if (!obj || !obj.isObject3D) return;
   const rot = TEAM_ROTATIONS[team] || { x: 0, y: 0, z: 0 };
@@ -387,46 +414,11 @@ function applyNormalExhaustGlow(scene, powerLevel, exceptGroups = []) {
   });
 }
 
-// === GLTF OPTION (preferred for max realism when asset present) ===
-// 1. Download a suitable low-poly / optimized F1 GLB (recommended: Meshy.ai free CC0 F1 models e.g. "Red Bull Racing Formula 1 Car" or "2026 Formula one car" in low-poly style; or export/convert the free Pixel Lab 2022 F1 Monopost).
-// 2. Place at frontend/public/models/f1-car.glb (create models/ dir).
-// 3. (Optional for smaller size/perf) Run: npx gltf-transform optimize public/models/f1-car.glb public/models/f1-car.glb --compress draco
-// 4. Set MODEL_URL below. Code falls back to enhanced procedural if missing or disabled.
-// Visual target: full wings (multi-element), halo, sidepods, diffuser, correct proportions, PBR textures from asset.
-// Path to the real high-detail 2025 McLaren MCL39 model (glTF + external PBR textures).
-// This was the best choice from the added "3d models" folder:
-// - scene.gltf + scene.bin + textures/ (separate textures) gives maximum flexibility for dynamic color tinting, part scaling (wear), wing rotation (aero), emissive glow (power), and future livery swaps.
-// - The .glb (66MB) is the bundled version but much larger and less editable for textures.
-// - .usdz is for AR only, not suitable here.
-// Separate glTF + textures is superior here for the customizer needs (we can tweak colors/textures/materials in code easily by traversing named parts like "main_body", "front_wing", "halo", "front_tire", "rear_tire", "exhaust" etc. and overriding .color / .scale / .rotation / emissive on the materials or objects).
-// We could achieve similar overrides with the .glb (by cloning materials and setting color/emissive/scale/rotation on traversed children), but the unpacked version is the source of truth, easier to author/edit textures externally, and matches the "with seperate textures" the user mentioned.
-// Note: This model is detailed (~high poly + large textures). For production web use, run optimization: npx gltf-transform optimize ... --draco etc. and move to public/models/.
-// The folder was copied to public/models/f1_2025_mclaren_mcl39/ during setup.
-// Default (legacy) - now computed dynamically via getModelUrlForTeam(team) based on selected driver/team
 const DEFAULT_MCLAREN_MODEL_URL = '/models/f1_2025_mclaren_mcl39/scene.gltf';
 
-// Base scale for the GLTF model. Increased by 70% (from 0.0095 to 0.01615) so the car appears substantially larger
-// by default in the viewer (addresses "too far away" / small model feedback). The auto-framing logic accounts
-// for this, but because of fixed model.position pivot + source center, the net visual effect is a bigger car
-// filling more of the view.
-const BASE_MODEL_SCALE = 1.01615; // 0.0095 * 1.7 (70% increase for substantially larger default model appearance)
+const BASE_MODEL_SCALE = 1.01615;
 
-// Real high-detail McLaren 2025 MCL39 loader (using the glTF + separate textures from the added "3d models" folder).
-// This is the BEST choice:
-// - scene.gltf + scene.bin + textures/ (separate PBR textures per part) is superior for the CarCustomizer use case.
-// - We get named parts/materials (main_body, front_wing, rear_wing, halo, front_tire, rear_tire, exhaust/exthaust, suspensions, wheel_rim etc. from the glTF JSON).
-// - Full control to dynamically:
-//   * Tint body color (teamColor) by setting material.color on main_body / related parts (preserves the detailed baseColor + normal + metallicRoughness maps).
-//   * Tint + scale tyres (compound color + wearScale) on front_tire / rear_tire meshes.
-//   * Rotate front/rear wing groups/meshes for aeroLevel (the wing nodes respond to .rotation.x).
-//   * Add emissive glow on exhaust parts for powerLevel.
-// - Separate textures make it easy to author/swap liveries externally or hot-replace maps in future.
-// - We can do *most* of the same overrides with the .glb (traverse + material clone + set color/scale/rotation/emissive), but the unpacked glTF gives cleaner part identification, easier external texture edits, and no re-bundling step.
-// - The .glb (66MB at root) is the all-in-one but bloated and less flexible for textures.
-// - .usdz is Apple-only AR format – ignore for this.
-// Recommendation implemented: Use the glTF with separate textures.
-
-function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', team = 'McLaren', modelUrl, viewZoom = 1, orbitControlsRef, frameKey = 0, forceClearHighlights = 0 }) {
+function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', team = 'McLaren', modelUrl, viewZoom = 1, orbitControlsRef, frameKey = 0, forceClearHighlights = 0, desiredPreset = null }) {
   const primaryGltf = useGLTF(modelUrl);
   const fallbackGltf = useGLTF(DEFAULT_MCLAREN_MODEL_URL);
   const gltf = (primaryGltf && primaryGltf.scene) ? primaryGltf : fallbackGltf;
@@ -442,56 +434,7 @@ function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', 
       console.log(`[CarCustomizer] Loaded team=${team} modelUrl=${modelUrl} nativeMaxDim=${maxD.toFixed(2)}${usingFallback ? ' (FALLBACK to McLaren)' : ''}`);
       if (!window.__stratbotModelsLogged) {
         window.__stratbotModelsLogged = true;
-        console.log('%c[CarCustomizer] === MODEL INTEGRATION VALIDATION SUMMARY ===', 'color: #0af; font-weight: bold');
         console.table(MODEL_INTEGRATION_SUMMARY);
-        console.log('All teams use same BASE_MODEL_SCALE + dynamic bbox framing + normalize (center/ground/orient + TEAM_POSITION_OFFSETS for fine-tune) + identical OrbitControls + camera presets.');
-        console.log('Issues discovered: (1) Part names for classify/hover/click are McLaren-centric so may be incomplete on other models (e.g. tyres/wings may still tag via broad keywords). (2) Some rots/scales/offsets are best-guess and may need visual tweak via the TEAM_* consts. (3) Livery tint only on McLaren; others use baked team textures (correct). (4) No models were missing after copy.');
-        console.log('To fine-tune Mercedes (or others):');
-        console.log('  - TEAM_POSITION_OFFSETS["Mercedes"] moves the car body (placement in view).');
-        console.log('  - TEAM_TARGET_CENTER_OFFSETS["Mercedes"] shifts the orbit target / rotation center (the "axis" the car rotates around during mouse drag / presets). This is likely what you need for "rotate along its axis the same".');
-        console.log('Edit either (or both), SAVE, then click the RESET button in the 3D toolbar (or switch driver and back) to re-apply framing with new values. The target one keeps the camera math neutral while choosing a better pivot point on the car.');
-        console.log('Ground plane ≈ y=-0.05. Use external glTF viewer or Blender on the Mercedes model to inspect origin (this W14 may have different pivot than previous W13).');
-      }
-      if (team === 'Mercedes') {
-        // Extra debug for Mercedes (new W14 model): log the centers so you can see what the offsets are doing.
-        console.log('[Mercedes debug] native bbox center (pre any adj):', box.getCenter(new THREE.Vector3()));
-        console.log('[Mercedes debug] effective target center after TEAM_TARGET_CENTER_OFFSETS:', /* will be logged by framing too */);
-
-        // === Automated in-project inspection (as requested) ===
-        // 1. Detailed bbox for deciding origin (you believe it's at driver seat)
-        const nativeBox = new THREE.Box3().setFromObject(gltf.scene);
-        console.log('[Mercedes origin debug - bbox] min:', nativeBox.min, 'max:', nativeBox.max, 'center:', nativeBox.getCenter(new THREE.Vector3()), 'size:', nativeBox.getSize(new THREE.Vector3()));
-
-        // 2. Find nodes that might be "driver seat" / interior to see their world position relative to center
-        console.log('[Mercedes node positions - look for seat/driver/interior]');
-        gltf.scene.traverse((child) => {
-          const n = (child.name || '').toLowerCase();
-          if (n.includes('seat') || n.includes('driver') || n.includes('interior') || n.includes('steering') || n.includes('cockpit') || n.includes('body')) {
-            const wp = new THREE.Vector3();
-            child.getWorldPosition(wp);
-            console.log(`  ${child.name} -> world pos (relative to model origin):`, wp);
-          }
-        });
-
-        // 3. "Open the glTF in text editor" equivalent - fetch and print root node transforms
-        fetch(modelUrl)
-          .then(r => r.json())
-          .then(g => {
-            console.log('[Mercedes glTF JSON root nodes - translations/rotations (origin info)]');
-            const sceneNodeIndices = g.scenes?.[0]?.nodes || [];
-            sceneNodeIndices.forEach(idx => {
-              const node = g.nodes?.[idx];
-              if (node) {
-                console.log(`  Root node ${node.name || idx}: translation=${JSON.stringify(node.translation) || 'identity (0,0,0)'}, rotation=${JSON.stringify(node.rotation) || 'identity'}`);
-              }
-            });
-            // Show any nodes with non-trivial translation (the offset is often baked here or in geometry)
-            const interesting = (g.nodes || []).filter(n => n.translation && (n.translation.some(v => Math.abs(v) > 0.01)));
-            if (interesting.length) {
-              console.log('  Nodes with translations (potential origin clues):', interesting.slice(0,5).map(n => ({name: n.name, trans: n.translation})));
-            }
-          })
-          .catch(err => console.log('glTF JSON fetch for inspection:', err.message));
       }
     }
     if (usingFallback) {
@@ -720,8 +663,7 @@ function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', 
   useEffect(() => {
     if (!gltf?.scene || framedRef.current) return;
 
-    // Measure using a *normalized* temp clone so bbox/center accounts for this team's orientation + ground + any per-team scale.
-    // This ensures camera framing, distance, and target match McLaren experience for every team.
+    // Use a normalized temp clone for bbox so framing works consistently for every team.
     const temp = gltf.scene.clone();
     normalizeOrientationAndCenter(temp, team);
     const box = new THREE.Box3().setFromObject(temp);
@@ -733,8 +675,6 @@ function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', 
       console.log('[Mercedes debug] pure normalized center (from temp bbox):', center.clone());
     }
 
-    // Apply target center adjustment (shifts the rotation pivot / orbit center without moving the model).
-    // This is the key for making "rotate along its axis" feel consistent across models.
     const targetAdj = TEAM_TARGET_CENTER_OFFSETS[team] || { x: 0, y: 0, z: 0 };
     center.x += (targetAdj.x || 0);
     center.y += (targetAdj.y || 0);
@@ -742,28 +682,32 @@ function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', 
 
     if (team === 'Mercedes') {
       console.log('[Mercedes debug] effective framing center after targetAdj:', center.clone());
-      console.log('[Mercedes debug] current TEAM_TARGET_CENTER_OFFSETS Mercedes:', TEAM_TARGET_CENTER_OFFSETS['Mercedes']);
-      console.log('[Mercedes framing] Using this center as orbit target. Adjust TEAM_TARGET_CENTER_OFFSETS if rotation pivot/axis needs tuning for this W14 model.');
     }
 
-    // Effective scale the model will have in the scene (base tuned for this export + current user zoom)
     const scaleMult = TEAM_SCALE_MULT[team] || 1;
     const renderScale = BASE_MODEL_SCALE * scaleMult * (viewZoom);
     const visualMaxDim = maxDim * renderScale;
 
-    // Distance so the car nicely fills ~70-80% of the view (professional showroom feel, not too tight, not lost in space)
     const fov = camera.fov * (Math.PI / 200);
-    const distance = (visualMaxDim / 2) / Math.tan(fov / 2) * 0.85;  // reduced factor (from 1.45) so with 70% larger BASE_MODEL_SCALE the car fills ~70% more of the view by default (tighter, more impressive presentation)
+    const distance = (visualMaxDim / 2) / Math.tan(fov / 2) * 0.85;
 
-    // Preferred presentation angle: front 3/4 (shows front wing + side profile), slightly elevated
-    // Vector chosen and normalized for this McLaren model orientation to give strong visual depth.
-    // After per-team normalize rot, same dir works for all.
-    const dir = new THREE.Vector3(1.15, 0.55, 1.65).normalize();
+    let dir;
+    if (desiredPreset === 'side') {
+      dir = new THREE.Vector3(1, 0.08, 0).normalize(); // clean side profile
+    } else if (desiredPreset === 'top') {
+      dir = new THREE.Vector3(0, 1, 0.01).normalize(); // mostly top-down
+    } else {
+      // front34 or reset or default
+      dir = new THREE.Vector3(1.15, 0.55, 1.65).normalize();
+    }
     const camPos = center.clone().add(dir.multiplyScalar(distance));
 
-    // Position camera
     camera.position.copy(camPos);
-    camera.lookAt(center.x, center.y, center.z); // tiny lift for elegant elevation
+    if (desiredPreset === 'top') {
+      camera.lookAt(center.x, center.y - 2, center.z);
+    } else {
+      camera.lookAt(center.x, center.y + 0.2, center.z);
+    }
     camera.updateProjectionMatrix();
 
     // Keep OrbitControls centered on the car so orbiting always feels natural around the vehicle
@@ -773,7 +717,7 @@ function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', 
     }
 
     framedRef.current = true;
-  }, [gltf?.scene, camera, orbitControlsRef, viewZoom, frameKey, team]);
+  }, [gltf?.scene, camera, orbitControlsRef, viewZoom, frameKey, team, desiredPreset]);
 
   if (!gltf?.scene) return null;
 
@@ -809,6 +753,104 @@ function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', 
   );
 }
 
+/** HDRI racetrack environment (background + IBL lighting + reflections for the car). Switches with weather prop. */
+function WeatherEnvironment({ weather = 'clear' }) {
+  const hdriUrl = USER_HDRI_OVERRIDES[weather] || WEATHER_HDRI[weather];
+  const texture = useTexture(hdriUrl);
+
+  useEffect(() => {
+    if (texture) {
+      texture.mapping = THREE.EquirectangularReflectionMapping;
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      texture.anisotropy = 16;
+      texture.needsUpdate = true;
+    }
+  }, [texture]);
+
+  const p = WEATHER_PRESETS[weather] || WEATHER_PRESETS.clear;
+
+  // For rainy ONLY: use a solid dark color for the visual background sphere (no HDRI image as BG, to avoid the bright pano).
+  // But KEEP the HDRI texture loaded and passed to Environment for reflections/lighting on the car
+  // (so car still gets rainy pano reflections to look wet/shiny).
+  // Extra lights + high env/ambient make the car much brighter.
+  // For other weathers: use the (user's) HDRI image as the pano BG with tint.
+  // (No visible floor — only invisible shadow receiver below.)
+  return (
+    <>
+      <Environment map={texture} background={false} intensity={p.envIntensity} />
+
+      {/* Background sphere - for rainy: solid dark (no HDRI texture); else: user's HDRI pano with tint */}
+      <mesh>
+        <sphereGeometry args={[450]} />
+        {weather === 'rainy' ? (
+          <meshBasicMaterial
+            color={p.rainyBgColor || '#0f1a28'}
+            side={THREE.BackSide}
+            fog={false}
+            depthWrite={false}
+          />
+        ) : (
+          <meshBasicMaterial
+            map={texture}
+            side={THREE.BackSide}
+            color={p.bgTint}
+            fog={false}
+            depthWrite={false}
+          />
+        )}
+      </mesh>
+    </>
+  );
+}
+
+/** Dynamic lights + accent tuned per weather so the car is always well lit and visible.
+ * Extra car-focused lights (key, fill, rims) for shine, specular pop, and glimmer on the PBR model.
+ * These don't affect the background sphere (which uses unlit MeshBasicMaterial - for rainy it's a solid dark color #0f1a28, no HDRI image as visual BG).
+ */
+function WeatherLights({ weather = 'clear' }) {
+  const p = WEATHER_PRESETS[weather] || WEATHER_PRESETS.clear;
+
+  // Boost extra lights more on dark weathers (rainy/cloudy) to prevent car looking too dark vs the pano
+  const extraMult = weather === 'rainy' ? 4.0 : (weather === 'overcast' ? 1.7 : 1.0);
+
+  return (
+    <>
+      <ambientLight intensity={p.ambient.intensity} color={p.ambient.color} />
+      <directionalLight
+        position={p.sun.position}
+        intensity={p.sun.intensity}
+        color={p.sun.color}
+        castShadow
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
+      />
+      {/* Colored accent/rim light helps the car "pop" especially in overcast/rainy conditions */}
+      <pointLight position={[-4, 3.5, -5.5]} intensity={p.accent.intensity} color={p.accent.color} />
+
+      {/* Additional "car-focused" lights (effectively car-only: the HDRI bg sphere is MeshBasicMaterial so ignores all lights).
+          These add strong specular highlights, edge rims and glints ("shine and glimmer") on the PBR car paint, carbon, glass and metals.
+          Positions relative to centered car. Easy to tweak the numbers below for different angles/moods. */}
+      {/* Front key light - strong frontal shine on nose/front wing */}
+      <pointLight position={[2.5, 4, 9]} intensity={3.5 * extraMult} color="#ffffff" castShadow={false} />
+      {/* Top key / overhead - roof, halo and upper body highlights */}
+      <pointLight position={[0, 9, 1]} intensity={2.8 * extraMult} color="#f8f8ff" castShadow={false} />
+      {/* Side fill / warm rim - side form and nice paint reflections */}
+      <pointLight position={[-7, 2.5, 4]} intensity={2.0 * extraMult} color="#ffeedd" castShadow={false} />
+      {/* Rear / back rim - tail, rear wing edges and taillight pop/glimmer */}
+      <pointLight position={[1, 3, -8]} intensity={2.5 * extraMult} color="#e0f0ff" castShadow={false} />
+      {/* Low side accent - wheel arches, underbody and extra lower specular glints */}
+      <pointLight position={[5, 1, -2]} intensity={1.8 * extraMult} color="#ffffff" castShadow={false} />
+    </>
+  );
+}
+
+/** Sets scene fog from the weather preset (distance fade into the HDRI horizon). */
+function WeatherFog({ weather = 'clear' }) {
+  const p = WEATHER_PRESETS[weather] || WEATHER_PRESETS.clear;
+  return <fog attach="fog" args={[p.fog.color, p.fog.near, p.fog.far]} />;
+}
+
 export function CarCustomizer({ stats, onStatsChange, driverName = 'Your Car', driverColor = '#3671C6', team = 'McLaren', weather = 'clear', trackName = 'Track', onClose, onApply }) {
   const [selectedPart, setSelectedPart] = useState(null);
   const [localStats, setLocalStats] = useState(stats);
@@ -817,6 +859,12 @@ export function CarCustomizer({ stats, onStatsChange, driverName = 'Your Car', d
   // without affecting the actual carStats (compound/wear/aero/power) that feed the sim + ML.
   const [viewZoom, setViewZoom] = useState(1); // start a bit closer by default for the detailed McLaren model
   const [showroomMode, setShowroomMode] = useState(true); //spinny thing
+  const [desiredPreset, setDesiredPreset] = useState(null);
+
+  // Reset preset when team changes so next view uses the new model's framing
+  useEffect(() => {
+    setDesiredPreset(null);
+  }, [team]);
 
   // Ref for OrbitControls so we can programmatically control camera for auto-framing and view presets
   const orbitControlsRef = useRef();
@@ -830,6 +878,11 @@ export function CarCustomizer({ stats, onStatsChange, driverName = 'Your Car', d
   // Preset view controls (motorsport showroom style)
   const setCameraPreset = (preset) => {
     if (!orbitControlsRef.current) return;
+
+    // Set desired so child framing logic picks correct dir, but still uses *perfect* distance
+    // computed from this model's bbox + RedBull's 4x scale + current viewZoom (fixes zoomed-out on side/top/34 for RedBull).
+    setDesiredPreset(preset);
+
     const controls = orbitControlsRef.current;
     const cam = controls.object;
     const target = controls.target.clone();
@@ -847,28 +900,33 @@ export function CarCustomizer({ stats, onStatsChange, driverName = 'Your Car', d
       case 'front34':
         // Professional front 3/4 elevated (the auto one)
 		setShowroomMode(false);
-        offset = new THREE.Vector3(1.15, 0.55, 1.65).normalize().multiplyScalar(8); // *1.7 for larger base model scale
+        offset = new THREE.Vector3(1.15, 0.55, 1.65).normalize().multiplyScalar(8);
         newZoom = 1.0;
         setViewZoom(newZoom);
+        setFrameKey(k => k + 1); // ensure bbox distance recalc for scaled models like RedBull
         break;
       case 'side':
         // Clean side profile to showcase length and aero
 		setShowroomMode(false);
-        offset = new THREE.Vector3(100, 10, 0.8).normalize().multiplyScalar(8); // *1.7 for larger base model scale
+        offset = new THREE.Vector3(100, 10, 0.8).normalize().multiplyScalar(8);
         newZoom = 1.0;
         setViewZoom(newZoom);
+        setFrameKey(k => k + 1);
         break;
       case 'top':
         // Top down for strategy overview feel
 		setShowroomMode(false);
-        offset = new THREE.Vector3(0, 100, 0).normalize().multiplyScalar(8); // *1.7 for larger base model scale
+        offset = new THREE.Vector3(0, 100, 0).normalize().multiplyScalar(8);
         newZoom = 1.0;
         setViewZoom(newZoom);
+        setFrameKey(k => k + 1);
         break;
       default:
         return;
     }
 
+    // We still do immediate position for responsiveness; the frameKey bump + desiredPreset will
+    // make the child's useEffect correct it with proper distance on next render.
     const newPos = target.clone().add(offset);
     cam.position.copy(newPos);
     controls.target.copy(target);
@@ -935,7 +993,7 @@ export function CarCustomizer({ stats, onStatsChange, driverName = 'Your Car', d
       <div className="flex items-center justify-between mb-4">
         <div>
           <div className="font-display text-xl text-white">Team Strategy for {driverName}'s Car</div>
-          <div className="text-xs text-gray-400">As the race engineer for this driver, make realistic F1 team choices (tyres, setup for weather/track). Click car parts or briefing. Affects sim + ML for accurate, driver-specific results. Using real high-detail {team} 2025 F1 car (glTF + separate PBR textures – authentic livery + live color/scale/rotation/glow tweaks where applicable).</div>
+          <div className="text-xs text-gray-400">As the race engineer for this driver, make realistic F1 team choices (tyres, setup for weather/track). Click car parts or briefing. Affects sim + ML for accurate, driver-specific results.</div>
         </div>
         <div className="flex gap-2">
           <button onClick={onClose} className="px-4 py-2 text-sm border border-f1-border rounded hover:bg-white/5">Close</button>
@@ -943,12 +1001,21 @@ export function CarCustomizer({ stats, onStatsChange, driverName = 'Your Car', d
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* 3D Visualizer - main "driving game" interaction area */}
-        <div className="lg:col-span-3 rounded-xl overflow-hidden border border-f1-border bg-black" style={{ height: 445 }}>
+        <div className="lg:col-span-9 rounded-xl overflow-hidden border border-f1-border bg-[#050508]" style={{ height: 550 }}>
           {/* Professional viewer toolbar (motorsport showroom style) */}
-          <div className="flex items-center justify-between bg-black/60 px-3 py-1 text-[10px] font-mono border-b border-f1-border/50">
-            <div className="text-f1-accent/80">3D MODEL VIEWER</div>
+          <div className="flex items-center justify-between bg-[#050508]/80 px-3 py-1 text-[10px] font-mono border-b border-f1-border/50">
+            <div className="text-f1-accent/80 flex items-center gap-2">
+              3D MODEL VIEWER
+              <span className="text-[9px] px-1.5 py-0 rounded bg-white/5 text-gray-400 border border-f1-border/40">
+                { (WEATHER_PRESETS[weather] || WEATHER_PRESETS.clear).name.toUpperCase() }
+                {(() => {
+                  const currentHdri = USER_HDRI_OVERRIDES[weather] || WEATHER_HDRI[weather];
+                  return (currentHdri && currentHdri.includes('/backgrounds/')) ? ' (custom)' : '';
+                })()}
+              </span>
+            </div>
             <div className="flex gap-1">
               <button onClick={() => setCameraPreset('reset')} className="px-2 py-0.5 border border-f1-border/60 hover:bg-white/5 rounded text-[9px]">RESET</button>
               <button onClick={() => setCameraPreset('front34')} className="px-2 py-0.5 border border-f1-border/60 hover:bg-white/5 rounded text-[9px]">FRONT 3/4</button>
@@ -958,27 +1025,33 @@ export function CarCustomizer({ stats, onStatsChange, driverName = 'Your Car', d
           </div>
           <Canvas
             camera={{ position: [0, 1.6, 4.8], fov: 50 }}
-            style={{ background: '#0a0a0f' }}
+            style={{ background: '#222222' }}
             shadows
             onPointerMissed={() => {
               setSelectedPart(null);
               setForceClearHighlights(prev => prev + 1);
             }}
           >
-            <ambientLight intensity={1.2} />
-            <directionalLight position={[6, 11, 4]} intensity={1.35} castShadow />
-            <pointLight position={[-4.5, 2.8, -4.5]} intensity={0.55} color="#ffaa55" />
+            {/* Fallback color (the HDRI background sphere above is the main pano; this is only if texture fails) */}
+            <color attach="background" args={['#222222']} />
+            <WeatherFog weather={weather} />
 
-            {/* Environment for premium PBR reflections (no extra asset for presets) */}
-            <Environment preset="city" />
+            {/* The ultra high-res HDRI racetrack for this weather condition.
+                Provides the 360° background panorama AND realistic environment lighting + reflections on the car. */}
+            <Suspense fallback={null}>
+              <WeatherEnvironment weather={weather} />
+            </Suspense>
 
-            {/* Subtle ground plane — raycast disabled so clicks pass through to deselect */}
-            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} receiveShadow raycast={() => null}>
-              <planeGeometry args={[9, 9]} />
-              <shadowMaterial transparent opacity={0.65} color="#0a0a0a" />
+            <WeatherLights weather={weather} />
+
+            {/* Invisible shadow receiver (no visible floor) so the car's shadows still ground it against the HDRI pano. */}
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow raycast={() => null}>
+              <planeGeometry args={[100, 100]} />
+              <shadowMaterial transparent opacity={0} />
             </mesh>
 
-            {/* Real detailed team-specific F1 car (or fallback) with live stat-driven tweaks */}
+            {/* Real detailed team-specific F1 car (or fallback) with live stat-driven tweaks.
+                The HDRI + weather lights ensure it is properly illuminated and visible in every condition. */}
             <Suspense fallback={
               <Html center style={{ color: '#00d4aa', fontSize: '12px', fontFamily: 'monospace' }}>
                 {`Loading detailed ${team} F1 car...`}<br />Large model (high poly + PBR textures)
@@ -995,6 +1068,7 @@ export function CarCustomizer({ stats, onStatsChange, driverName = 'Your Car', d
                 orbitControlsRef={orbitControlsRef}
                 frameKey={frameKey}
                 forceClearHighlights={forceClearHighlights}
+                desiredPreset={desiredPreset}
               />
             </Suspense>
 
@@ -1020,7 +1094,7 @@ export function CarCustomizer({ stats, onStatsChange, driverName = 'Your Car', d
         </div>
 
         {/* Controls / Stats - "click what you want to change" */}
-        <div className="lg:col-span-2 space-y-4 text-sm">
+        <div className="lg:col-span-3 space-y-4 text-sm">
           <div className="rounded-lg border border-f1-border bg-black/30 p-3">
             <div className="flex items-center justify-between mb-2">
               <div>
@@ -1139,9 +1213,6 @@ export function CarCustomizer({ stats, onStatsChange, driverName = 'Your Car', d
       <div className="mt-4 text-center text-xs text-gray-500">
         <strong>Professional viewer controls (top of 3D area):</strong> RESET • FRONT 3/4 • SIDE • TOP for instant showroom-style views.
         <br />Drag to orbit • Mouse wheel or "View Zoom" slider (right) to magnify/close in • Low min-distance allows extreme close-ups. Auto-frames on load using bounding box for any model.
-      </div>
-      <div className="mt-1 text-center text-[10px] text-gray-500">
-        Using the unpacked glTF + separate textures (best choice from your "3d models" folder) because it gives the most flexible live material/part tweaks while preserving the high-quality PBR maps.
       </div>
     </div>
   );

@@ -67,7 +67,7 @@ const MODEL_VARIANT_OPTIONS = [
   { id: 'xgb', label: 'XGBoost', desc: 'XGB from same training run (uses weather)', mae: '1.5323s' },
 ];
 
-export function PreRaceSetup({ onStart }) {
+export function PreRaceSetup({ onStart, previousRaces = [], onViewPrevious = () => {} }) {
   const [weather, setWeather] = useState('clear');
   const [raceType, setRaceType] = useState('standard');
   const [trackedDriver, setTrackedDriver] = useState('VER');
@@ -85,6 +85,13 @@ export function PreRaceSetup({ onStart }) {
 
   // Car customization state (FYP-II interactive 3D)
   const [carStats, setCarStats] = useState({ compound: 'medium', initialTyreWear: 0, aeroLevel: 5, powerLevel: 5 });
+
+  // Derived current selections for the left summary sidebar (live updating, no scroll needed)
+  const currentWeather = WEATHER_OPTIONS.find(w => w.id === weather);
+  const currentRace = RACE_TYPE_OPTIONS.find(r => r.id === raceType);
+  const currentTrack = TRACK_OPTIONS.find(t => t.id === trackId);
+  const currentDriver = DRIVERS.find(d => d.id === trackedDriver);
+  const currentModel = MODEL_VARIANT_OPTIONS.find(m => m.id === modelVariant);
 
   const handleLogin = async () => {
     setLoginError('');
@@ -119,16 +126,132 @@ export function PreRaceSetup({ onStart }) {
 
   return (
     <div className="fixed inset-0 z-40 overflow-y-auto bg-f1-dark hud-grid">
-      <div className="mx-auto max-w-4xl px-4 py-8">
-        {/* Header */}
-        <div className="mb-10 text-center animate-fade-in-up">
-          <div className="font-display text-2xl font-bold tracking-widest text-white mb-1">
-            RACE CONFIGURATION
+      {/* Full edge-to-edge sticky top bar with StratBot branding, names + CS numbers (visible on scroll).
+          Brighter text for names, larger size, added right-side content. */}
+      <div className="sticky top-0 z-50 w-full border-b border-f1-border bg-f1-dark/95 backdrop-blur-md">
+        <div className="flex w-full">
+          {/* Left column aligned to sidebar (under STRATBOT logo) - contains only STRATBOT + GitHub for alignment */}
+          <div className="w-72 flex-shrink-0 px-4 py-2">
+            <div className="text-left flex items-center gap-2">
+              {/* GitHub link on the left side, with logo, vertically center aligned with STRATBOT */}
+              <a
+                href="https://github.com/szy-cmd/stratbot"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-400 hover:text-white transition-colors"
+                title="View source on GitHub"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+                </svg>
+              </a>
+              <span 
+                className="font-display text-3xl font-black tracking-[3px] text-f1-accent cursor-pointer select-none hover:bg-f1-panel/40 hover:text-white px-1 -mx-1 rounded transition-colors"
+                title="StratBot - FYP P80F25"
+              >
+                STRATBOT
+              </span>
+            </div>
           </div>
-          <p className="font-mono text-xs text-gray-600 tracking-wider">
-            CONFIGURE YOUR SESSION PARAMETERS
-          </p>
+
+          {/* Main top area - F1 STRATEGY DASHBOARD continues the one line, names under as one continuous line, right info on far right */}
+          <div className="flex-1 px-4 py-2 flex justify-between items-start">
+            <div className="flex flex-col">
+              <span className="font-display text-lg font-bold tracking-wider text-white hover:bg-f1-panel/40 hover:text-f1-accent px-1 -mx-1 rounded transition-colors cursor-pointer select-none" title="F1 Strategy Dashboard">
+                &nbsp;F1 STRATEGY DASHBOARD
+              </span>
+              <div className="text-[9px] font-mono tracking-[0.5px] text-white/85 font-medium mt-1">
+                ZAAFIR EJAZ (CS221222) • EBAD AHMED (CS221217) • FATIMA ATHER RAJPUT (CS221270)
+              </div>
+            </div>
+            <div className="text-right text-[10px] font-mono text-gray-400 tracking-wider hidden sm:block">
+              DHA SUFFA UNIVERSITY<br />
+              <span className="text-f1-accent/70">FYP P80F25</span>
+            </div>
+          </div>
         </div>
+      </div>
+
+      {/* Full-width layout with sidebar on the very left (under the STRATBOT logo area in top bar), like Gmail sidebar. Uses full available space. */}
+      <div className="flex w-full pt-6 pb-8">
+        {/* Left sidebar - sticky, moves along with scroll. Current selection fixed at top of sidebar, previous results scrollable below within sidebar if long. */}
+        <div className="w-72 flex-shrink-0 px-4 border-r border-f1-border/40 bg-f1-dark/50 sticky top-20 h-[calc(100vh-5rem)] flex flex-col overflow-hidden">
+          {/* CURRENT SELECTION - always visible at top of sidebar */}
+          <div className="flex-shrink-0 bg-f1-panel border border-f1-border rounded-lg p-4 text-sm shadow-xl mb-2">
+            <div className="font-display text-xs font-semibold uppercase tracking-wider text-f1-accent mb-3">CURRENT SELECTION</div>
+            <div className="space-y-2.5 text-xs">
+              <div className="flex justify-between gap-2">
+                <span className="text-gray-400 shrink-0">Weather</span>
+                <span className="font-medium text-white text-right">{currentWeather?.icon} {currentWeather?.label}</span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-gray-400 shrink-0">Race</span>
+                <span className="font-medium text-white text-right">{currentRace?.label} ({currentRace?.laps} laps)</span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-gray-400 shrink-0">Circuit</span>
+                <span className="font-medium text-white truncate text-right">{currentTrack?.name}</span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-gray-400 shrink-0">Driver</span>
+                <span className="font-medium text-white flex items-center gap-1.5 justify-end truncate text-right">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: currentDriver?.color }}></span>
+                  {currentDriver?.name} #{currentDriver?.number}
+                </span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-gray-400 shrink-0">Setup</span>
+                <span className="font-medium text-white text-right leading-tight">
+                  {carStats.compound} • {carStats.initialTyreWear}% wear • A{carStats.aeroLevel}/P{carStats.powerLevel}
+                </span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-gray-400 shrink-0">Model</span>
+                <span className="font-medium text-white text-right">{currentModel?.label}</span>
+              </div>
+            </div>
+            <div className="mt-3 pt-2 border-t border-f1-border/50 text-[10px] text-gray-500">Live • Affects sim + ML</div>
+          </div>
+
+          {/* PREVIOUS RESULTS - scrolls inside the sticky sidebar if many entries */}
+          <div className="flex-1 overflow-auto bg-f1-panel border border-f1-border rounded-lg p-4 text-sm shadow-xl">
+            <div className="font-display text-xs font-semibold uppercase tracking-wider text-f1-accent mb-2">PREVIOUS RESULTS</div>
+            {previousRaces.length === 0 ? (
+              <div className="text-[10px] text-gray-500 italic">Complete a simulation to record results here.</div>
+            ) : (
+              <div className="space-y-1">
+                {previousRaces.slice(0, 8).map((race) => {
+                  const winner = race.drivers?.[0];
+                  const trackName = TRACK_OPTIONS.find((t) => t.id === race.raceConfig?.trackId)?.name || 'Track';
+                  const date = new Date(race.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                  return (
+                    <button
+                      key={race.id}
+                      onClick={() => onViewPrevious(race)}
+                      className="w-full text-left px-2 py-1.5 rounded text-xs border border-transparent hover:border-f1-border/60 hover:bg-f1-panel/60 transition flex justify-between items-center gap-2"
+                    >
+                      <span className="font-mono text-gray-400">{date}</span>
+                      <span className="truncate text-white/90 flex-1 text-right">{trackName}</span>
+                      <span className="text-f1-accent/80 font-medium text-[10px] whitespace-nowrap">→ {winner?.name || '?'}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Main content - takes remaining space to the right of sidebar */}
+        <div className="flex-1 min-w-0 px-4">
+          {/* Header */}
+          <div className="mb-8 text-center animate-fade-in-up">
+            <div className="font-display text-2xl font-bold tracking-widest text-white mb-1">
+              RACE CONFIGURATION
+            </div>
+            <p className="font-mono text-xs text-gray-600 tracking-wider">
+              CONFIGURE YOUR SESSION PARAMETERS
+            </p>
+          </div>
 
         {/* FYP-II: Simple User Auth (SRS) - demo login */}
         <Section title="User Login (FYP-II)" index={0}>
@@ -193,7 +316,7 @@ export function PreRaceSetup({ onStart }) {
 
         {/* Track Selection */}
         <Section title="Circuit" index={3}>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {TRACK_OPTIONS.map((t) => (
               <button
                 key={t.id}
@@ -380,7 +503,8 @@ export function PreRaceSetup({ onStart }) {
             Press to begin the race simulation
           </div>
         </div>
-      </div>
+          </div> {/* close flex-1 main content */}
+        </div> {/* close outer flex for sidebar + main */}
     </div>
   );
 }

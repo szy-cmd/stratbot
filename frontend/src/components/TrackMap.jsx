@@ -1,15 +1,37 @@
-import React, { useRef, useState, useCallback, useMemo } from 'react';
+import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react';
 import { TRACK_OPTIONS, DEFAULT_TRACK } from '../data/mockRaceState';
 
 // Static imports – no glob, no async; Vite resolves these at build time.
+// New detailed RaceCircuit* (user-added, including better Monaco as RaceCircuitMonaco) + Spa + previous ones.
+// Simple bahrain/monaco removed per request. The SVGs are used as the outline (stroked for new ones).
 import buddhismSvg from '../racetrack-svgs/buddhism-svgfind-com.svg?raw';
 import grandPrixSvg from '../racetrack-svgs/grand prix-svgfind-com.svg?raw';
 import prenoesDijonSvg from '../racetrack-svgs/prenoes dijon-svgfind-com.svg?raw';
+import raceBahrainSvg from '../racetrack-svgs/RaceCircuitBahrain.svg?raw';
+import raceMonacoSvg from '../racetrack-svgs/RaceCircuitMonaco.svg?raw';
+import raceCatalunyaSvg from '../racetrack-svgs/RaceCircuitCatalunya.svg?raw';
+import raceSilverstoneSvg from '../racetrack-svgs/RaceCircuitSilverstone.svg?raw';
+import raceSuzukaSvg from '../racetrack-svgs/RaceCircuitSuzuka.svg?raw';
+import raceMonzaSvg from '../racetrack-svgs/RaceCircuitAutodromaDiMonza.svg?raw';
+import raceInterlagosSvg from '../racetrack-svgs/RaceCircuitInterlagos.svg?raw';
+import raceAbuDhabiSvg from '../racetrack-svgs/RaceCircuitAbuDhabi.svg?raw';
+import raceSpaSvg from '../racetrack-svgs/Spa-FrancorchampsRaceCircuitSpa.svg?raw';
 
 const TRACK_SVG_MAP = {
   'buddhism-svgfind-com': buddhismSvg,
   'grand prix-svgfind-com': grandPrixSvg,
   'prenoes dijon-svgfind-com': prenoesDijonSvg,
+  // user-added detailed outlines (RaceCircuit*) - these provide the path to use exactly as the track outline
+  // for visual (thick stroke) + car markers (getPointAtLength follows the d precisely)
+  'RaceCircuitBahrain': raceBahrainSvg,
+  'RaceCircuitMonaco': raceMonacoSvg,
+  'RaceCircuitCatalunya': raceCatalunyaSvg,
+  'RaceCircuitSilverstone': raceSilverstoneSvg,
+  'RaceCircuitSuzuka': raceSuzukaSvg,
+  'RaceCircuitAutodromaDiMonza': raceMonzaSvg,
+  'RaceCircuitInterlagos': raceInterlagosSvg,
+  'RaceCircuitAbuDhabi': raceAbuDhabiSvg,
+  'Spa-FrancorchampsRaceCircuitSpa': raceSpaSvg,
 };
 
 /**
@@ -37,23 +59,50 @@ function parseTrackSvg(svgText) {
 
   const viewBox = svg.getAttribute('viewBox') || '0 0 400 200';
 
+  let outerPathD;
+  let fullPathD;
+
   if (allPaths.length >= 2) {
-    // Multiple <path> elements — use first for positioning, all for rendering
-    const outerPathD = allPaths[0].getAttribute('d');
-    const innerPathD = allPaths[1].getAttribute('d');
-    const fullPathD = outerPathD && innerPathD ? `${outerPathD} ${innerPathD}` : outerPathD;
-    return { viewBox, fullPathD, outerPathD };
+    // Multiple <path> elements.
+    // Pick the LONGEST d as the primary "outline" to follow for car markers (ensures detailed
+    // new RaceCircuit* paths like Suzuka's main loop are used for positioning, not a secondary segment).
+    // full uses concat for legacy evenodd band rendering (or multi-outline).
+    const pathEls = [...allPaths].sort((a, b) => {
+      const da = (b.getAttribute('d') || '').length;
+      const db = (a.getAttribute('d') || '').length;
+      return da - db;
+    });
+    const posEl = pathEls[0];
+    outerPathD = posEl.getAttribute('d');
+    fullPathD = [...allPaths].map(p => p.getAttribute('d')).filter(Boolean).join(' ');
+  } else {
+    // Single <path> element.
+    // Legacy: if it contains z + m subpath (the svgfind-com ones), split and use first sub for positioning
+    // so cars follow outer edge without relatives breaking position. New single-path outlines (no inner sub)
+    // will use the whole d as the outline.
+    fullPathD = allPaths[0].getAttribute('d');
+    if (!fullPathD) return null;
+
+    const zIdx = fullPathD.search(/[zZ]/);
+    outerPathD = zIdx !== -1 ? fullPathD.substring(0, zIdx + 1).trim() : fullPathD;
   }
 
-  // Single <path> with sub-paths
-  const fullPathD = allPaths[0].getAttribute('d');
-  if (!fullPathD) return null;
+  if (!outerPathD) return null;
 
-  // Extract the first sub-path (up to and including the first z/Z) for positioning
-  const zIdx = fullPathD.search(/[zZ]/);
-  const outerPathD = zIdx !== -1 ? fullPathD.substring(0, zIdx + 1).trim() : fullPathD;
+  // Detect pure outline SVGs (new RaceCircuit* etc): the main path is stroked (fill=none) and
+  // should be rendered as thick stroke (the "outline") rather than evenodd filled band.
+  // For these, outerPathD is the exact path to follow for cars.
+  let isOutline = false;
+  const candidate = allPaths.length >= 2
+    ? [...allPaths].sort((a, b) => ((b.getAttribute('d') || '').length - (a.getAttribute('d') || '').length))[0]
+    : allPaths[0];
+  if (candidate) {
+    const fillAttr = (candidate.getAttribute('fill') || '').trim().toLowerCase();
+    const strokeAttr = candidate.getAttribute('stroke');
+    isOutline = fillAttr === 'none' || (fillAttr === '' && !!strokeAttr);
+  }
 
-  return { viewBox, fullPathD, outerPathD };
+  return { viewBox, fullPathD, outerPathD, isOutline };
 }
 
 /**
@@ -98,10 +147,22 @@ function CarMarkers({ pathRef, drivers }) {
   );
 }
 
-export function TrackMap({ drivers, className = '' }) {
+export function TrackMap({ drivers, className = '', trackId: propTrackId }) {
   const pathRef = useRef(null);
-  const [trackId, setTrackId] = useState(DEFAULT_TRACK);
+  const getValidTrack = (id) => (id && TRACK_SVG_MAP[id] ? id : DEFAULT_TRACK);
+  const [trackId, setTrackId] = useState(() => getValidTrack(propTrackId));
   const [pathReady, setPathReady] = useState(false);
+
+  // Keep map in sync with race config (e.g. selected track at race start)
+  useEffect(() => {
+    if (propTrackId) {
+      const valid = getValidTrack(propTrackId);
+      if (valid !== trackId) {
+        setPathReady(false);
+        setTrackId(valid);
+      }
+    }
+  }, [propTrackId, trackId]);
 
   const parsed = useMemo(() => {
     const raw = TRACK_SVG_MAP[trackId];
@@ -146,6 +207,14 @@ export function TrackMap({ drivers, className = '' }) {
   const vbW = Number(vbParts[2]) || 512;
   const vbH = Number(vbParts[3]) || 512;
 
+  // Make the map content ~5% smaller (inset) to prevent clipping at the edges of the container box.
+  // Scale towards center of the viewBox. Applied to a group containing visual track + hidden path + car markers
+  // so that getPointAtLength positions align perfectly with the scaled visual outline.
+  const mapScale = 0.95;
+  const cx = vbW / 2;
+  const cy = vbH / 2;
+  const mapScaleTransform = `translate(${cx} ${cy}) scale(${mapScale}) translate(${-cx} ${-cy})`;
+
   return (
     <div className={`overflow-hidden rounded-lg border border-f1-border bg-f1-panel p-3 ${className}`}>
       <div className="mb-2 flex items-center justify-between">
@@ -176,23 +245,54 @@ export function TrackMap({ drivers, className = '' }) {
             <stop offset="100%" stopColor="#1e1e28" />
           </linearGradient>
         </defs>
-        {/* Track surface (area between outer + inner edges) */}
-        <path
-          d={parsed.fullPathD}
-          fill="url(#trackFillRender)"
-          fillRule="evenodd"
-          stroke="#3a3a44"
-          strokeWidth="1.5"
-        />
-        {/* Hidden outer-edge path used only for car positioning */}
-        <path
-          ref={setPathCallback}
-          d={parsed.outerPathD}
-          fill="none"
-          stroke="none"
-          aria-hidden="true"
-        />
-        {pathReady && <CarMarkers pathRef={pathRef} drivers={drivers ?? []} />}
+        {/* 5% scale inset applied to the entire track + cars so the outline doesn't clip the edges of the rendered box.
+            The transform is on a group so visual (stroked outline or fill) + hidden path + CarMarkers (which use raw local coords from getPointAtLength)
+            all stay aligned after scaling. */}
+        <g transform={mapScaleTransform}>
+          {/* Visual track: for new added RaceCircuit* SVGs (and similar) that provide the track as a stroked OUTLINE (fill="none"),
+              render it as a thick stroked line so the exact provided path is the visible track "outline".
+              Cars will follow it precisely via the hidden path below. Legacy SVGs keep the evenodd filled band surface. */}
+          {parsed.isOutline ? (
+            <path
+              d={parsed.outerPathD}
+              fill="none"
+              stroke="#3a3a44"
+              strokeWidth="16"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              opacity="0.95"
+            />
+          ) : (
+            /* Track surface (area between outer + inner edges) for legacy */
+            <path
+              d={parsed.fullPathD}
+              fill="url(#trackFillRender)"
+              fillRule="evenodd"
+              stroke="#3a3a44"
+              strokeWidth="1.5"
+            />
+          )}
+          {/* Subtle center line using the exact outline path from the SVG (helps visualize the line being followed by cars) */}
+          <path
+            d={parsed.outerPathD}
+            fill="none"
+            stroke="#5a5a66"
+            strokeWidth="4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            opacity="0.55"
+          />
+          {/* Hidden path (exact outline from SVG) used ONLY for car positioning via getPointAtLength + getTotalLength.
+              This ensures cars follow the provided track outline precisely, even for the newly added SVGs. */}
+          <path
+            ref={setPathCallback}
+            d={parsed.outerPathD}
+            fill="none"
+            stroke="none"
+            aria-hidden="true"
+          />
+          {pathReady && <CarMarkers pathRef={pathRef} drivers={drivers ?? []} />}
+        </g>
       </svg>
     </div>
   );

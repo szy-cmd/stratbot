@@ -1,11 +1,7 @@
 # StratBot (P80F25)
 
-![StratBot Banner](assets/stratbot-banner.jpg)
-
 **AI-assisted Formula 1 race strategy simulation and analysis platform**  
 DHA Suffa University — Final Year Project
-
-> Clean minimal banner above (core F1 car + branding, no clutter). [Previous variations](assets/stratbot-banner-v2.jpg) available if preferred.
 
 **Team**
 
@@ -18,6 +14,23 @@ DHA Suffa University — Final Year Project
 [GitHub](https://github.com/szy-cmd/stratbot) • [Live Demo (frontend prototype)](https://stratbot-fyp.netlify.app)
 
 > **Advisory tool only.** StratBot helps users explore historical F1 data, predict lap-level performance, and simulate strategy decisions. It does **not** connect to official live telemetry or make autonomous team decisions (current FYP-I scope).
+
+## UI Showcase
+
+Key interactive features (captured live with Playwright):
+
+**3D Modeler (Car Customizer in Pre-Race Setup)**
+- Full interactive 3D F1 car with live weather-adaptive HDRI backgrounds from user-provided panos, custom lighting, part selection, stats that affect visuals + sim/ML.
+
+![3D Modeler - Clear](assets/screenshots/3d-modeler-clear.png)
+![3D Modeler - Rainy (brighter car, dark custom BG, HDRI reflections kept for car only)](assets/screenshots/3d-modeler-rainy.png)
+![3D Modeler - Overcast](assets/screenshots/3d-modeler-overcast.png)
+
+**Pre-Race Setup + Controls**
+![Pre-Race Setup](assets/screenshots/pre-race-setup.png)
+
+**Boot → Setup Flow**
+![App Boot to Setup](assets/screenshots/app-boot-setup.png)
 
 ---
 
