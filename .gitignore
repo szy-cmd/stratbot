@@ -35,6 +35,8 @@ checkpoints/
 *.ckpt
 *.png
 !docs/evaluation/**/*.png
+!assets/screenshots/*.png
+!frontend/screenshots/*.png
 
 # IDE / local tooling
 .idea/
