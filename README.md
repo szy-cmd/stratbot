@@ -5,7 +5,7 @@
 **AI-assisted Formula 1 race strategy simulation and analysis platform**  
 DHA Suffa University — Final Year Project
 
-> **Variations:** [Banner v2 (minimal)](assets/stratbot-banner-v2.jpg)
+> Clean minimal banner above (core F1 car + branding, no clutter). [Previous variations](assets/stratbot-banner-v2.jpg) available if preferred.
 
 **Team**
 
