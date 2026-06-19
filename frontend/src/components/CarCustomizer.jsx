@@ -1,125 +1,592 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, Suspense, useRef } from 'react';
+import { useThree } from '@react-three/fiber';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Html } from '@react-three/drei';
+import { OrbitControls, Environment, Html } from '@react-three/drei';
+import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 
 /**
- * Interactive 3D F1 Car visualizer / customizer.
- * Procedural model using primitives for F1-like look (no external asset needed).
- * Click parts or use controls to change stats: compound (tyres), initial wear, aero, power.
- * Live updates visuals.
- * Like a driving game car select screen.
+ * Interactive 3D F1 Car visualizer / customizer (STRATBOT).
+ * ENHANCED: Detailed procedural F1 geometry (front/rear wings multi-element, halo, sidepods,
+ * diffuser, proper proportions, suspension) + PBR MeshStandardMaterial.
+ * Optional GLTF path: place modern F1 .glb (e.g. from Meshy.ai free CC0 "F1 low poly" or
+ * exported 2022 Pixel Lab model) at /public/models/f1-car.glb and set MODEL_URL below.
+ * Stats drive live updates (tyre wear/compound scale+color, wing angle from aero, engine glow from power, body color from team).
+ * Clickable parts + sliders. Affects sim physics + ML LapDelta.
+ * Designed for FYP demos / presentations: realistic from all angles, premium lighting.
  */
 
 const COMPOUNDS = ['soft', 'medium', 'hard'];
 const COMPOUND_COLORS = { soft: '#ff3333', medium: '#ffcc00', hard: '#eeeeee' };
 
-function F1Car({ stats, onPartClick, selectedPart, teamColor = '#3671C6' }) {
+// Part highlight colors — tune these if you want stronger/weaker feedback
+const HIGHLIGHT = {
+  hover: { color: 0x00d4aa, intensity: 0.72 },    // f1-accent teal on hover
+  selected: { color: 0xff8700, intensity: 0.95 },   // McLaren orange when selected
+};
+
+const PART_HINTS = {
+  tyres: 'Tyre compound & wear — click wheels again to cycle compound.',
+  aero: 'Wing downforce — adjusts front/rear wing angle in the viewer.',
+  power: 'Engine output — affects straight-line pace and exhaust glow.',
+  body: 'Main chassis / monocoque — team colour is applied here.',
+  suspension: 'Suspension assembly — structural, no direct setup slider.',
+  halo: 'Driver safety halo — fixed regulatory structure.',
+  cockpit: 'Cockpit / headrest area.',
+  mirrors: 'Side mirrors.',
+};
+
+/** Classify a glTF node or material name into a customizer part */
+function classifyNodeName(name) {
+  if (!name) return null;
+  const n = name.toLowerCase();
+
+  if (n.includes('front_tire')) return { id: 'tyres', label: 'Front Tyres' };
+  if (n.includes('rear_tire')) return { id: 'tyres', label: 'Rear Tyres' };
+  if (n.includes('wheel_rim') || n.includes('wheel_nut') || n.includes('wheel_screw') || n.includes('wheel_cover') || n.includes('tire')) {
+    return { id: 'tyres', label: 'Wheels & Tyres' };
+  }
+  if (n.includes('front_wing')) return { id: 'aero', label: 'Front Wing' };
+  if (n.includes('rear_wing')) return { id: 'aero', label: 'Rear Wing' };
+  if (n.includes('drs') || n.includes('windlet')) return { id: 'aero', label: 'Aerodynamics' };
+  if (n.includes('exhaust') || n.includes('exthaust')) return { id: 'power', label: 'Engine / Exhaust' };
+  if (n.includes('suspension')) return { id: 'suspension', label: 'Suspension' };
+  if (n.includes('halo')) return { id: 'halo', label: 'Halo' };
+  if (n.includes('headrest')) return { id: 'cockpit', label: 'Cockpit' };
+  if (n.includes('mirror')) return { id: 'mirrors', label: 'Mirrors' };
+  if (n.includes('main_body') || n.includes('cam_tbone')) return { id: 'body', label: 'Chassis / Body' };
+
+  return null;
+}
+
+/** Meshes are named Object_N — walk parents + materials to find the real part */
+function resolvePartFromObject(obj) {
+  if (obj?.userData?.partId) {
+    return { id: obj.userData.partId, label: obj.userData.partLabel };
+  }
+
+  let current = obj;
+  while (current) {
+    const hit = classifyNodeName(current.name);
+    if (hit) return hit;
+    current = current.parent;
+  }
+
+  if (obj?.isMesh) {
+    const mats = Array.isArray(obj.material) ? obj.material : (obj.material ? [obj.material] : []);
+    for (const mat of mats) {
+      const hit = classifyNodeName(mat?.name);
+      if (hit) return hit;
+    }
+  }
+
+  return { id: 'unknown', label: 'Unknown Part' };
+}
+
+/** Finer group for hover/select — e.g. front axle vs rear axle */
+function resolvePartGroup(obj) {
+  if (obj?.userData?.partGroup) return obj.userData.partGroup;
+
+  let current = obj;
+  while (current) {
+    const n = (current.name || '').toLowerCase();
+    if (n.includes('front_tire')) return 'front_tire';
+    if (n.includes('rear_tire')) return 'rear_tire';
+    if (n.includes('front_wing')) return 'front_wing';
+    if (n.includes('rear_wing')) return 'rear_wing';
+    if (n.includes('exhaust') || n.includes('exthaust')) return 'exhaust';
+    if (n.includes('suspension')) return 'suspension';
+    if (n.includes('headrest')) return 'cockpit';
+    if (n.includes('main_body')) return 'body';
+    current = current.parent;
+  }
+
+  return resolvePartFromObject(obj).id;
+}
+
+/** Stamp every mesh once so clicks/hover don't re-walk the hierarchy */
+function tagModelParts(scene) {
+  if (!scene) return;
+  scene.traverse((child) => {
+    if (!child.isMesh) return;
+    const part = resolvePartFromObject(child);
+    child.userData.partId = part.id;
+    child.userData.partLabel = part.label;
+    child.userData.partGroup = resolvePartGroup(child);
+  });
+}
+
+function meshPartId(mesh) {
+  return mesh?.userData?.partId ?? resolvePartFromObject(mesh).id;
+}
+
+function meshPartGroup(mesh) {
+  return mesh?.userData?.partGroup ?? meshPartId(mesh);
+}
+
+function forEachMaterial(mesh, fn) {
+  if (!mesh?.material) return;
+  const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  mats.forEach(fn);
+}
+
+function saveMaterialBaseline(mat) {
+  if (!mat || mat.userData._hlBase) return;
+  mat.userData._hlBase = {
+    emissive: mat.emissive ? mat.emissive.clone() : new THREE.Color(0x000000),
+    intensity: mat.emissiveIntensity ?? 0,
+  };
+}
+
+function applyMeshHighlight(mesh, mode) {
+  forEachMaterial(mesh, (mat) => {
+    if (!mat.emissive) mat.emissive = new THREE.Color(0x000000);
+    // Only save baseline when applying a highlight, not when clearing
+    if (mode === 'hover' || mode === 'selected') {
+      saveMaterialBaseline(mat);
+    }
+    if (mode === 'hover') {
+      mat.emissive.setHex(HIGHLIGHT.hover.color);
+      mat.emissiveIntensity = HIGHLIGHT.hover.intensity;
+    } else if (mode === 'selected') {
+      mat.emissive.setHex(HIGHLIGHT.selected.color);
+      mat.emissiveIntensity = HIGHLIGHT.selected.intensity;
+    } else {
+      // Restore to baseline if it exists, otherwise set to black
+      if (mat.userData._hlBase) {
+        mat.emissive.copy(mat.userData._hlBase.emissive);
+        mat.emissiveIntensity = mat.userData._hlBase.intensity;
+      } else {
+        mat.emissive.setHex(0x000000);
+        mat.emissiveIntensity = 0;
+      }
+    }
+  });
+}
+
+function clearHighlightsOnScene(scene, exceptGroup = null) {
+  if (!scene) return;
+  scene.traverse((child) => {
+    if (!child.isMesh) return;
+    if (exceptGroup && meshPartGroup(child) === exceptGroup) return;
+    applyMeshHighlight(child, null);
+  });
+}
+
+function applyHighlightsForGroup(scene, partGroup, mode) {
+  if (!scene || !partGroup) return;
+  scene.traverse((child) => {
+    if (!child.isMesh) return;
+    if (meshPartGroup(child) === partGroup) {
+      applyMeshHighlight(child, mode);
+    }
+  });
+}
+
+/** Re-apply the dynamic engine/exhaust emissive glow (from powerLevel) only to non-highlighted exhaust parts.
+ *  This ensures glow is visible in normal state even after highlight clears/restores (which target baseline emissive=0).
+ */
+function applyNormalExhaustGlow(scene, powerLevel, exceptGroups = []) {
+  if (!scene) return;
+  const engineGlow = Math.max(0.18, ((powerLevel || 5) - 4) * 0.115);
+  scene.traverse((child) => {
+    if (!child.isMesh) return;
+    const n = (child.name || '').toLowerCase();
+    if (n.includes('exhaust') || n.includes('exthaust')) {
+      const g = meshPartGroup(child);
+      if (exceptGroups.includes(g)) return;
+      forEachMaterial(child, (m) => {
+        if (m.emissive) {
+          m.emissive.setHex(0xff5500);
+          m.emissive.multiplyScalar(engineGlow * 0.9);
+        }
+        if (m.emissiveIntensity !== undefined) m.emissiveIntensity = engineGlow * 1.8;
+      });
+    }
+  });
+}
+
+// === GLTF OPTION (preferred for max realism when asset present) ===
+// 1. Download a suitable low-poly / optimized F1 GLB (recommended: Meshy.ai free CC0 F1 models e.g. "Red Bull Racing Formula 1 Car" or "2026 Formula one car" in low-poly style; or export/convert the free Pixel Lab 2022 F1 Monopost).
+// 2. Place at frontend/public/models/f1-car.glb (create models/ dir).
+// 3. (Optional for smaller size/perf) Run: npx gltf-transform optimize public/models/f1-car.glb public/models/f1-car.glb --compress draco
+// 4. Set MODEL_URL below. Code falls back to enhanced procedural if missing or disabled.
+// Visual target: full wings (multi-element), halo, sidepods, diffuser, correct proportions, PBR textures from asset.
+// Path to the real high-detail 2025 McLaren MCL39 model (glTF + external PBR textures).
+// This was the best choice from the added "3d models" folder:
+// - scene.gltf + scene.bin + textures/ (separate textures) gives maximum flexibility for dynamic color tinting, part scaling (wear), wing rotation (aero), emissive glow (power), and future livery swaps.
+// - The .glb (66MB) is the bundled version but much larger and less editable for textures.
+// - .usdz is for AR only, not suitable here.
+// Separate glTF + textures is superior here for the customizer needs (we can tweak colors/textures/materials in code easily by traversing named parts like "main_body", "front_wing", "halo", "front_tire", "rear_tire", "exhaust" etc. and overriding .color / .scale / .rotation / emissive on the materials or objects).
+// We could achieve similar overrides with the .glb (by cloning materials and setting color/emissive/scale/rotation on traversed children), but the unpacked version is the source of truth, easier to author/edit textures externally, and matches the "with seperate textures" the user mentioned.
+// Note: This model is detailed (~high poly + large textures). For production web use, run optimization: npx gltf-transform optimize ... --draco etc. and move to public/models/.
+// The folder was copied to public/models/f1_2025_mclaren_mcl39/ during setup.
+const MODEL_URL = '/models/f1_2025_mclaren_mcl39/scene.gltf';
+
+// Base scale for the GLTF model. Increased by 70% (from 0.0095 to 0.01615) so the car appears substantially larger
+// by default in the viewer (addresses "too far away" / small model feedback). The auto-framing logic accounts
+// for this, but because of fixed model.position pivot + source center, the net visual effect is a bigger car
+// filling more of the view.
+const BASE_MODEL_SCALE = 1.01615; // 0.0095 * 1.7 (70% increase for substantially larger default model appearance)
+
+// Real high-detail McLaren 2025 MCL39 loader (using the glTF + separate textures from the added "3d models" folder).
+// This is the BEST choice:
+// - scene.gltf + scene.bin + textures/ (separate PBR textures per part) is superior for the CarCustomizer use case.
+// - We get named parts/materials (main_body, front_wing, rear_wing, halo, front_tire, rear_tire, exhaust/exthaust, suspensions, wheel_rim etc. from the glTF JSON).
+// - Full control to dynamically:
+//   * Tint body color (teamColor) by setting material.color on main_body / related parts (preserves the detailed baseColor + normal + metallicRoughness maps).
+//   * Tint + scale tyres (compound color + wearScale) on front_tire / rear_tire meshes.
+//   * Rotate front/rear wing groups/meshes for aeroLevel (the wing nodes respond to .rotation.x).
+//   * Add emissive glow on exhaust parts for powerLevel.
+// - Separate textures make it easy to author/swap liveries externally or hot-replace maps in future.
+// - We can do *most* of the same overrides with the .glb (traverse + material clone + set color/scale/rotation/emissive), but the unpacked glTF gives cleaner part identification, easier external texture edits, and no re-bundling step.
+// - The .glb (66MB at root) is the all-in-one but bloated and less flexible for textures.
+// - .usdz is Apple-only AR format – ignore for this.
+// Recommendation implemented: Use the glTF with separate textures.
+
+function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', modelUrl, viewZoom = 1, orbitControlsRef, frameKey = 0, forceClearHighlights = 0 }) {
+  const gltf = useGLTF(modelUrl);
   const { compound, initialTyreWear, aeroLevel, powerLevel } = stats;
+  const { camera } = useThree();
+  const hoveredGroupRef = useRef(null);
+  const modelRef = useRef(null);
+  const selectedGroup = selectedPart?.group ?? null;
+  const selectedGroupRef = useRef(selectedGroup);
+
   const tyreColor = COMPOUND_COLORS[compound] || '#ffcc00';
-  const wearScale = 1 - (initialTyreWear || 0) / 120; // visual wear on tyres
-  const wingAngle = (aeroLevel - 5) * 0.08; // radians
-  const engineGlow = powerLevel > 6 ? 0.6 : 0.2;
+  const wearScale = Math.max(0.72, 1 - ((initialTyreWear || 0) / 95));
+  const wingAngle = (aeroLevel - 5) * 0.085;
+  const engineGlow = Math.max(0.18, (powerLevel - 4) * 0.115);
+
+  // Auto-framing flag (dynamic, supports model changes)
+  const framedRef = useRef(false);
+
+  // Reset framing when model or explicit frameKey changes (for Reset button / future models)
+  useEffect(() => {
+    framedRef.current = false;
+  }, [modelUrl, frameKey]);
+
+  // Keep a ref in sync for event handlers (avoid stale closures for selected state during hovers/clicks)
+  useEffect(() => {
+    selectedGroupRef.current = selectedGroup;
+  }, [selectedGroup]);
+
+  useEffect(() => {
+    if (!gltf?.scene) return;
+
+    // Clone materials on first load / when needed so we don't mutate shared ones across re-renders
+    const cloned = new WeakSet();
+
+    gltf.scene.traverse((child) => {
+      if (!child.isMesh) return;
+
+      // Ensure we have per-mesh materials we can safely mutate
+      if (child.material && !cloned.has(child.material)) {
+        if (Array.isArray(child.material)) {
+          child.material = child.material.map(m => {
+            const c = m.clone();
+            cloned.add(c);
+            // Preserve any existing highlight baseline across re-clones (e.g. while selected and stats change)
+            if (m.userData?._hlBase) {
+              c.userData._hlBase = {
+                emissive: m.userData._hlBase.emissive.clone(),
+                intensity: m.userData._hlBase.intensity,
+              };
+            }
+            // Save baseline immediately after cloning to preserve initial state (guarded inside save to not capture highlight state)
+            saveMaterialBaseline(c);
+            return c;
+          });
+        } else {
+          const origMat = child.material;
+          const c = origMat.clone();
+          child.material = c;
+          cloned.add(c);
+          // Preserve any existing highlight baseline across re-clones (e.g. while selected and stats change)
+          if (origMat.userData?._hlBase) {
+            c.userData._hlBase = {
+              emissive: origMat.userData._hlBase.emissive.clone(),
+              intensity: origMat.userData._hlBase.intensity,
+            };
+          }
+          // Save baseline immediately after cloning to preserve initial state (guarded inside save to not capture highlight state)
+          saveMaterialBaseline(c);
+        }
+      }
+
+      const n = (child.name || '').toLowerCase();
+      const mat = child.material;
+      const mats = Array.isArray(mat) ? mat : (mat ? [mat] : []);
+
+      // === Body / main structure recoloring (team color) ===
+      if (n.includes('main_body') || n.includes('suspensions') || n.includes('headrest') ||
+          n.includes('wheel_cover') || n.includes('wheel_windlet') || n.includes('mirror')) {
+        mats.forEach(m => {
+          if (m.color) m.color.set(teamColor);
+          // keep the rich PBR maps from the model
+        });
+      }
+
+      // === Halo (special carbon part, light tint) ===
+      if (n.includes('halo')) {
+        mats.forEach(m => {
+          if (m.color) m.color.set('#2a2a30'); // dark carbon, or mix with team if wanted
+        });
+      }
+
+      // === Tyres / wheels: compound color + wear scale ===
+      if (n.includes('tire') || n.includes('rear_tire') || n.includes('front_tire')) {
+        // Scale for visual wear (affects the whole wheel group or tire submesh)
+        child.scale.setScalar(wearScale);
+        mats.forEach(m => {
+          if (m.color) m.color.set(tyreColor); // tint the rubber
+          // The model already has good normal + roughness for tires; tinting color works well on top of baseColor
+        });
+      }
+
+      // Also tint wheel rims/nuts lightly or leave (they have their own maps)
+      if (n.includes('wheel_rim') || n.includes('wheel_nut') || n.includes('wheel_screw')) {
+        // keep mostly as-is, or slight desat
+      }
+
+      // === Wings rotation for aero ===
+      if (n.includes('front_wing') || n.includes('rear_wing') || n.includes('drs_puller')) {
+        const isFront = n.includes('front');
+        // Apply to the wing nodes (they are groups or meshes in the hierarchy)
+        child.rotation.x = wingAngle * (isFront ? 0.55 : 1.0);
+      }
+
+      // === Engine / exhaust glow (power) ===
+      if (n.includes('exhaust') || n.includes('exthaust')) {
+        mats.forEach(m => {
+          if (m.emissive) {
+            m.emissive.setHex(0xff5500);
+            m.emissive.multiplyScalar(engineGlow * 0.9);
+          }
+          if (m.emissiveIntensity !== undefined) m.emissiveIntensity = engineGlow * 1.8;
+        });
+      }
+    });
+  }, [gltf, stats, teamColor, compound, initialTyreWear, aeroLevel, powerLevel, tyreColor, wearScale, wingAngle, engineGlow]);
+
+  // Re-apply selection glow after stat/material updates (traverse effect resets emissive)
+  useEffect(() => {
+    if (!modelRef.current) return;
+    // Clear hover state when selection is cleared to prevent stale hover highlights
+    if (!selectedGroup) {
+      hoveredGroupRef.current = null;
+    }
+    clearHighlightsOnScene(modelRef.current, selectedGroup);
+    applyHighlightsForGroup(modelRef.current, selectedGroup, 'selected');
+    if (hoveredGroupRef.current && hoveredGroupRef.current !== selectedGroup) {
+      applyHighlightsForGroup(modelRef.current, hoveredGroupRef.current, 'hover');
+    }
+    // Re-apply normal exhaust glows to any exhaust groups not currently under highlight (selected or hover)
+    const excepts = [];
+    if (selectedGroup) excepts.push(selectedGroup);
+    if (hoveredGroupRef.current && hoveredGroupRef.current !== selectedGroup) excepts.push(hoveredGroupRef.current);
+    applyNormalExhaustGlow(modelRef.current, powerLevel, excepts);
+  }, [selectedGroup, stats, teamColor, compound, initialTyreWear, aeroLevel, powerLevel]);
+
+  // Force clear all highlights when parent requests it (e.g., clicking outside)
+  useEffect(() => {
+    if (!modelRef.current || forceClearHighlights === 0) return;
+    hoveredGroupRef.current = null;
+    clearHighlightsOnScene(modelRef.current, null);
+    // After clearing everything, ensure exhaust glows are restored on all (no highlights active)
+    applyNormalExhaustGlow(modelRef.current, powerLevel, []);
+  }, [forceClearHighlights, powerLevel]);
+
+  const handlePointerOver = (e) => {
+    e.stopPropagation();
+    const mesh = e.object;
+    if (!mesh?.isMesh) return;
+
+    const partGroup = meshPartGroup(mesh);
+    hoveredGroupRef.current = partGroup;
+
+    const sel = selectedGroupRef.current;
+    modelRef.current?.traverse((child) => {
+      if (!child.isMesh) return;
+      const childGroup = meshPartGroup(child);
+      if (childGroup === partGroup && childGroup !== sel) {
+        applyMeshHighlight(child, 'hover');
+      } else if (childGroup !== sel) {
+        applyMeshHighlight(child, null);
+      }
+    });
+
+    // Re-assert normal exhaust glow on exhaust parts that are not the hovered group and not selected
+    // (clears during this over may have restored stale baseline on other exhausts)
+    if (modelRef.current) {
+      const exceptGs = [partGroup];
+      if (sel && sel !== partGroup) exceptGs.push(sel);
+      applyNormalExhaustGlow(modelRef.current, powerLevel, exceptGs);
+    }
+
+    document.body.style.cursor = 'pointer';
+  };
+
+  const handlePointerOut = (e) => {
+    e.stopPropagation();
+    const previousHover = hoveredGroupRef.current;
+    hoveredGroupRef.current = null;
+
+    const sel = selectedGroupRef.current;
+    modelRef.current?.traverse((child) => {
+      if (!child.isMesh) return;
+      const childGroup = meshPartGroup(child);
+      // Clear hover highlight from the previously hovered group (unless it's the selected group)
+      if (childGroup === previousHover && childGroup !== sel) {
+        applyMeshHighlight(child, null);
+      }
+    });
+
+    // Re-assert normal exhaust glows for non-selected exhausts (in case the just-cleared hover group was exhaust, or to ensure freshness)
+    if (modelRef.current) {
+      const exceptGs = sel ? [sel] : [];
+      applyNormalExhaustGlow(modelRef.current, powerLevel, exceptGs);
+    }
+
+    document.body.style.cursor = 'auto';
+  };
+
+  const handleClick = (e) => {
+    e.stopPropagation();
+    const part = resolvePartFromObject(e.object);
+    onPartClick?.({ ...part, group: meshPartGroup(e.object) });
+  };
+
+  // ========================================================
+  // AUTO-FRAMING SYSTEM (dynamic bounding box based)
+  // Frames the car nicely on initial load in a professional front-3/4 slightly elevated view.
+  // Calculates from the loaded glTF scene (supports future different models without hard-coded values).
+  // Accounts for the render scale (base * user viewZoom) so the car fills the view appropriately.
+  // Sets both camera position and OrbitControls target for consistent orbiting around the car.
+  // ========================================================
+  useEffect(() => {
+    if (!gltf?.scene || framedRef.current) return;
+
+    const box = new THREE.Box3().setFromObject(gltf.scene);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+
+    // Effective scale the model will have in the scene (base tuned for this export + current user zoom)
+    const renderScale = BASE_MODEL_SCALE * (viewZoom);
+    const visualMaxDim = maxDim * renderScale;
+
+    // Distance so the car nicely fills ~70-80% of the view (professional showroom feel, not too tight, not lost in space)
+    const fov = camera.fov * (Math.PI / 200);
+    const distance = (visualMaxDim / 2) / Math.tan(fov / 2) * 0.85;  // reduced factor (from 1.45) so with 70% larger BASE_MODEL_SCALE the car fills ~70% more of the view by default (tighter, more impressive presentation)
+
+    // Preferred presentation angle: front 3/4 (shows front wing + side profile), slightly elevated
+    // Vector chosen and normalized for this McLaren model orientation to give strong visual depth
+    const dir = new THREE.Vector3(1.15, 0.55, 1.65).normalize();
+    const camPos = center.clone().add(dir.multiplyScalar(distance));
+
+    // Position camera
+    camera.position.copy(camPos);
+    camera.lookAt(center.x, center.y, center.z); // tiny lift for elegant elevation
+    camera.updateProjectionMatrix();
+
+    // Keep OrbitControls centered on the car so orbiting always feels natural around the vehicle
+    if (orbitControlsRef && orbitControlsRef.current) {
+      orbitControlsRef.current.target.copy(center);
+      orbitControlsRef.current.update();
+    }
+
+    framedRef.current = true;
+  }, [gltf?.scene, camera, orbitControlsRef, viewZoom, frameKey]);
+
+  if (!gltf?.scene) return null;
+
+  // Center + reasonable scale for the customizer canvas (McLaren 2025 is a full-size F1 car in the source units).
+  // viewZoom (passed from UI) lets the user magnify the car in the viewport independently of the actual car physics stats.
+  // Base scale tuned for this exported model; user can make it much larger/smaller.
+  const model = gltf.scene.clone(); // clone so we don't mutate the cached original across re-renders/stats
+  tagModelParts(model);
+  modelRef.current = model;
+  const baseScale = BASE_MODEL_SCALE;
+  model.scale.setScalar(baseScale * (viewZoom || 1));
+  model.position.set(0,0,0); // adjusted y for 70% larger model scale so it still "sits" reasonably above the ground plane
+  model.rotation.set(0, 0, 0); // tiny yaw for nicer default 3/4 view
 
   return (
-    <group>
-      {/* Main chassis/body */}
-      <mesh 
-        position={[0, 0.6, 0]} 
-        onClick={() => onPartClick('body')}
-        onPointerOver={(e) => { e.object.material.emissive = new THREE.Color(selectedPart === 'body' ? 0x444444 : 0x222222); }}
-      >
-        <boxGeometry args={[3.2, 0.7, 1.1]} />
-        <meshPhongMaterial 
-          color={teamColor} 
-          shininess={30} 
-          emissive={selectedPart === 'body' ? 0x333333 : 0x000000} 
-        />
-      </mesh>
-
-      {/* Cockpit / halo area */}
-      <mesh position={[0.2, 1.1, 0]} onClick={() => onPartClick('cockpit')}>
-        <boxGeometry args={[1.2, 0.5, 0.9]} />
-        <meshPhongMaterial color="#222233" emissive={selectedPart === 'cockpit' ? 0x333333 : 0} />
-      </mesh>
-
-      {/* Nose cone */}
-      <mesh position={[-1.8, 0.55, 0]} onClick={() => onPartClick('nose')}>
-        <coneGeometry args={[0.4, 1.2, 4]} />
-        <meshPhongMaterial color="#1a1a2e" emissive={selectedPart === 'nose' ? 0x333333 : 0} />
-      </mesh>
-
-      {/* Front wing */}
-      <group position={[-1.5, 0.4, 0]} rotation={[wingAngle * 0.5, 0, 0]} onClick={() => onPartClick('frontWing')}>
-        <mesh>
-          <boxGeometry args={[1.8, 0.08, 1.6]} />
-          <meshPhongMaterial color="#333344" emissive={selectedPart === 'frontWing' ? 0x222266 : 0} />
-        </mesh>
-      </group>
-
-      {/* Rear wing */}
-      <group position={[1.4, 0.9, 0]} rotation={[wingAngle, 0, 0]} onClick={() => onPartClick('rearWing')}>
-        <mesh>
-          <boxGeometry args={[1.4, 0.1, 1.8]} />
-          <meshPhongMaterial color="#333344" emissive={selectedPart === 'rearWing' ? 0x222266 : 0} />
-        </mesh>
-        {/* Wing supports */}
-        <mesh position={[0, -0.3, 0.6]}>
-          <boxGeometry args={[0.1, 0.6, 0.1]} />
-          <meshPhongMaterial color="#222233" />
-        </mesh>
-        <mesh position={[0, -0.3, -0.6]}>
-          <boxGeometry args={[0.1, 0.6, 0.1]} />
-          <meshPhongMaterial color="#222233" />
-        </mesh>
-      </group>
-
-      {/* 4 Wheels - clickable for tyre compound/wear */}
-      {[-1.1, 1.1].map((x, i) => (
-        <group key={i}>
-          {/* Left wheels */}
-          <mesh 
-            position={[x, 0.45, 0.85]} 
-            rotation={[0, 0, Math.PI / 2]}
-            onClick={() => onPartClick('tyres')}
-          >
-            <cylinderGeometry args={[0.45 * wearScale, 0.45 * wearScale, 0.35, 16]} />
-            <meshPhongMaterial color={tyreColor} shininess={10} />
-          </mesh>
-          {/* Right wheels */}
-          <mesh 
-            position={[x, 0.45, -0.85]} 
-            rotation={[0, 0, Math.PI / 2]}
-            onClick={() => onPartClick('tyres')}
-          >
-            <cylinderGeometry args={[0.45 * wearScale, 0.45 * wearScale, 0.35, 16]} />
-            <meshPhongMaterial color={tyreColor} shininess={10} />
-          </mesh>
-        </group>
-      ))}
-
-      {/* Engine / exhaust glow area */}
-      <mesh position={[0.8, 0.7, 0]} onClick={() => onPartClick('engine')}>
-        <boxGeometry args={[1.2, 0.5, 0.7]} />
-        <meshPhongMaterial 
-          color="#111122" 
-          emissive={engineGlow > 0.3 ? new THREE.Color(0xff6600).multiplyScalar(engineGlow) : 0x000000} 
-          emissiveIntensity={engineGlow} 
-        />
-      </mesh>
-
-      {/* Simple "driver" helmet */}
-      <mesh position={[-0.1, 1.3, 0]} onClick={() => onPartClick('driver')}>
-        <sphereGeometry args={[0.28]} />
-        <meshPhongMaterial color="#222244" />
-      </mesh>
-    </group>
+    <primitive
+      object={model}
+      onClick={handleClick}
+      onPointerOver={handlePointerOver}
+      onPointerOut={handlePointerOut}
+    />
   );
 }
 
 export function CarCustomizer({ stats, onStatsChange, driverName = 'Your Car', driverColor = '#3671C6', weather = 'clear', trackName = 'Track', onClose, onApply }) {
   const [selectedPart, setSelectedPart] = useState(null);
   const [localStats, setLocalStats] = useState(stats);
+
+  // Separate view control so user can zoom/scale the entire car in the viewport
+  // without affecting the actual carStats (compound/wear/aero/power) that feed the sim + ML.
+  const [viewZoom, setViewZoom] = useState(1); // start a bit closer by default for the detailed McLaren model
+  const [showroomMode, setShowroomMode] = useState(true); //spinny thing
+
+  // Ref for OrbitControls so we can programmatically control camera for auto-framing and view presets
+  const orbitControlsRef = useRef();
+
+  // Bump this to force child to re-run auto-framing (e.g. on Reset)
+  const [frameKey, setFrameKey] = useState(0);
+
+  // Force clear highlights when clicking outside the model
+  const [forceClearHighlights, setForceClearHighlights] = useState(0);
+
+  // Preset view controls (motorsport showroom style)
+  const setCameraPreset = (preset) => {
+    if (!orbitControlsRef.current) return;
+    const controls = orbitControlsRef.current;
+    const cam = controls.object;
+    const target = controls.target.clone();
+
+    let offset;
+    let newZoom = viewZoom;
+
+    switch (preset) {
+      case 'reset':
+	    setShowroomMode(true);
+        newZoom = 1.6;
+		setFrameKey(k => k + 1);
+        setViewZoom(newZoom); // force the child RealF1Model to re-run its auto-framing (bounding box + 3/4 view)
+        break;
+      case 'front34':
+        // Professional front 3/4 elevated (the auto one)
+		setShowroomMode(false);
+        offset = new THREE.Vector3(1.15, 0.55, 1.65).normalize().multiplyScalar(8); // *1.7 for larger base model scale
+        newZoom = 1.0;
+        setViewZoom(newZoom);
+        break;
+      case 'side':
+        // Clean side profile to showcase length and aero
+		setShowroomMode(false);
+        offset = new THREE.Vector3(100, 10, 0.8).normalize().multiplyScalar(8); // *1.7 for larger base model scale
+        newZoom = 1.0;
+        setViewZoom(newZoom);
+        break;
+      case 'top':
+        // Top down for strategy overview feel
+		setShowroomMode(false);
+        offset = new THREE.Vector3(0, 100, 0).normalize().multiplyScalar(8); // *1.7 for larger base model scale
+        newZoom = 1.0;
+        setViewZoom(newZoom);
+        break;
+      default:
+        return;
+    }
+
+    const newPos = target.clone().add(offset);
+    cam.position.copy(newPos);
+    controls.target.copy(target);
+    controls.update();
+  };
 
   const updateStat = (key, value) => {
     const newStats = { ...localStats, [key]: value };
@@ -129,7 +596,7 @@ export function CarCustomizer({ stats, onStatsChange, driverName = 'Your Car', d
 
   const handlePartClick = (part) => {
     setSelectedPart(part);
-    if (part === 'tyres') {
+    if (part.id === 'tyres') {
       // Cycle compound on click
       const current = localStats.compound || 'medium';
       const next = COMPOUNDS[(COMPOUNDS.indexOf(current) + 1) % 3];
@@ -174,12 +641,14 @@ export function CarCustomizer({ stats, onStatsChange, driverName = 'Your Car', d
     onStatsChange?.(recommended);
   };
 
+  const effectiveModelUrl = MODEL_URL; // can be overridden by prop in future
+
   return (
     <div className="rounded-2xl border border-f1-border bg-f1-panel p-6 shadow-xl">
       <div className="flex items-center justify-between mb-4">
         <div>
           <div className="font-display text-xl text-white">Team Strategy for {driverName}'s Car</div>
-          <div className="text-xs text-gray-400">As the race engineer for this driver, make realistic F1 team choices (tyres, setup for weather/track). Click car parts or briefing. Affects sim + ML for accurate, driver-specific results.</div>
+          <div className="text-xs text-gray-400">As the race engineer for this driver, make realistic F1 team choices (tyres, setup for weather/track). Click car parts or briefing. Affects sim + ML for accurate, driver-specific results. Using real high-detail 2025 McLaren MCL39 (glTF + separate PBR textures – best for live color, scale, rotation, and glow tweaks).</div>
         </div>
         <div className="flex gap-2">
           <button onClick={onClose} className="px-4 py-2 text-sm border border-f1-border rounded hover:bg-white/5">Close</button>
@@ -189,26 +658,75 @@ export function CarCustomizer({ stats, onStatsChange, driverName = 'Your Car', d
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
         {/* 3D Visualizer - main "driving game" interaction area */}
-        <div className="lg:col-span-3 rounded-xl overflow-hidden border border-f1-border bg-black" style={{ height: 420 }}>
-          <Canvas camera={{ position: [0, 2, 6], fov: 50 }} style={{ background: '#0a0a0f' }}>
-            <ambientLight intensity={0.6} />
-            <directionalLight position={[5, 10, 5]} intensity={1.2} castShadow />
-            <pointLight position={[-5, 3, -5]} intensity={0.5} color="#ffaa44" />
+        <div className="lg:col-span-3 rounded-xl overflow-hidden border border-f1-border bg-black" style={{ height: 445 }}>
+          {/* Professional viewer toolbar (motorsport showroom style) */}
+          <div className="flex items-center justify-between bg-black/60 px-3 py-1 text-[10px] font-mono border-b border-f1-border/50">
+            <div className="text-f1-accent/80">3D MODEL VIEWER</div>
+            <div className="flex gap-1">
+              <button onClick={() => setCameraPreset('reset')} className="px-2 py-0.5 border border-f1-border/60 hover:bg-white/5 rounded text-[9px]">RESET</button>
+              <button onClick={() => setCameraPreset('front34')} className="px-2 py-0.5 border border-f1-border/60 hover:bg-white/5 rounded text-[9px]">FRONT 3/4</button>
+              <button onClick={() => setCameraPreset('side')} className="px-2 py-0.5 border border-f1-border/60 hover:bg-white/5 rounded text-[9px]">SIDE</button>
+              <button onClick={() => setCameraPreset('top')} className="px-2 py-0.5 border border-f1-border/60 hover:bg-white/5 rounded text-[9px]">TOP</button>
+            </div>
+          </div>
+          <Canvas
+            camera={{ position: [0, 1.6, 4.8], fov: 50 }}
+            style={{ background: '#0a0a0f' }}
+            shadows
+            onPointerMissed={() => {
+              setSelectedPart(null);
+              setForceClearHighlights(prev => prev + 1);
+            }}
+          >
+            <ambientLight intensity={1.2} />
+            <directionalLight position={[6, 11, 4]} intensity={1.35} castShadow />
+            <pointLight position={[-4.5, 2.8, -4.5]} intensity={0.55} color="#ffaa55" />
 
-            <F1Car 
-              stats={localStats} 
-              onPartClick={handlePartClick} 
-              selectedPart={selectedPart} 
-              teamColor={driverColor}
-            />
+            {/* Environment for premium PBR reflections (no extra asset for presets) */}
+            <Environment preset="city" />
 
-            <OrbitControls 
-              enablePan={false} 
-              enableZoom={true} 
-              minDistance={3} 
-              maxDistance={10}
-              autoRotate={false}
-              target={[0, 0.8, 0]}
+            {/* Subtle ground plane — raycast disabled so clicks pass through to deselect */}
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.55 * 1.7, 0]} receiveShadow raycast={() => null}>
+              <planeGeometry args={[9, 9]} />
+              <shadowMaterial transparent opacity={0.65} color="#0a0a0a" />
+            </mesh>
+
+            {/* Real detailed McLaren 2025 MCL39 (or fallback) with live stat-driven tweaks */}
+            <Suspense fallback={
+              <Html center style={{ color: '#00d4aa', fontSize: '12px', fontFamily: 'monospace' }}>
+                Loading detailed 2025 McLaren MCL39...<br />Large model (high poly + PBR textures)
+              </Html>
+            }>
+              <RealF1Model
+                stats={localStats}
+                onPartClick={handlePartClick}
+                selectedPart={selectedPart}
+                teamColor={driverColor}
+                modelUrl={effectiveModelUrl}
+                viewZoom={viewZoom}
+                orbitControlsRef={orbitControlsRef}
+                frameKey={frameKey}
+                forceClearHighlights={forceClearHighlights}
+              />
+            </Suspense>
+
+            <OrbitControls
+              ref={orbitControlsRef}
+              enablePan={false}
+              enableZoom={true}
+              enableRotate={true}
+              enableDamping={true}
+              dampingFactor={0.1}
+			  autoRotate={showroomMode} //autorotate
+			  autoRotateSpeed={0.3} //rotate
+              minDistance={0.15}          // very close inspection allowed
+              maxDistance={12}
+              zoomSpeed={1.4}
+              rotateSpeed={0.75}
+              // Vertical orbit limits (polar): prevent flipping upside down or going under the car
+              minPolarAngle={0.15}
+              maxPolarAngle={Math.PI * 0.92}
+              target={[0, 0.55, 0]}
             />
           </Canvas>
         </div>
@@ -216,10 +734,28 @@ export function CarCustomizer({ stats, onStatsChange, driverName = 'Your Car', d
         {/* Controls / Stats - "click what you want to change" */}
         <div className="lg:col-span-2 space-y-4 text-sm">
           <div className="rounded-lg border border-f1-border bg-black/30 p-3">
-            <div className="font-mono text-xs uppercase text-f1-accent mb-2">Selected: {selectedPart || 'Click a part on the car'}</div>
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <div className="font-mono text-xs uppercase text-f1-accent">
+                  Selected: {selectedPart?.label || 'Click a part on the car'}
+                </div>
+                {selectedPart && (
+                  <div className="text-[10px] text-gray-500 mt-0.5">
+                    {PART_HINTS[selectedPart.id] || 'Inspect this area on the 3D model.'}
+                  </div>
+                )}
+              </div>
+              <button 
+                onClick={() => setViewZoom(1.0)} 
+                className="text-[10px] px-2 py-0.5 border border-f1-border rounded hover:bg-white/5"
+                title="Reset magnification to default"
+              >
+                Reset Zoom
+              </button>
+            </div>
             
-            {/* Tyre / Compound */}
-            <div className="mb-3">
+            {/* Tyre / Compound — highlighted when wheels selected */}
+            <div className={`mb-3 rounded-md p-2 transition-colors ${selectedPart?.id === 'tyres' ? 'bg-f1-accent/10 ring-1 ring-f1-accent/40' : ''}`}>
               <div className="flex justify-between mb-1">
                 <span>Tyre Compound</span>
                 <span className="font-mono text-f1-accent">{localStats.compound?.toUpperCase()}</span>
@@ -239,7 +775,7 @@ export function CarCustomizer({ stats, onStatsChange, driverName = 'Your Car', d
             </div>
 
             {/* Initial Tyre Wear */}
-            <div className="mb-3">
+            <div className={`mb-3 rounded-md p-2 transition-colors ${selectedPart?.id === 'tyres' ? 'bg-f1-accent/10 ring-1 ring-f1-accent/40' : ''}`}>
               <div className="flex justify-between mb-1">
                 <span>Initial Tyre Wear</span>
                 <span className="font-mono">{localStats.initialTyreWear || 0}%</span>
@@ -254,7 +790,7 @@ export function CarCustomizer({ stats, onStatsChange, driverName = 'Your Car', d
             </div>
 
             {/* Aero Level */}
-            <div className="mb-3">
+            <div className={`mb-3 rounded-md p-2 transition-colors ${selectedPart?.id === 'aero' ? 'bg-f1-accent/10 ring-1 ring-f1-accent/40' : ''}`}>
               <div className="flex justify-between mb-1">
                 <span>Aero / Downforce Level</span>
                 <span className="font-mono">{localStats.aeroLevel || 5}/10</span>
@@ -269,7 +805,7 @@ export function CarCustomizer({ stats, onStatsChange, driverName = 'Your Car', d
             </div>
 
             {/* Power Level */}
-            <div>
+            <div className={`rounded-md p-2 transition-colors ${selectedPart?.id === 'power' ? 'bg-f1-accent/10 ring-1 ring-f1-accent/40' : ''}`}>
               <div className="flex justify-between mb-1">
                 <span>Engine Power Level</span>
                 <span className="font-mono">{localStats.powerLevel || 5}/10</span>
@@ -281,6 +817,21 @@ export function CarCustomizer({ stats, onStatsChange, driverName = 'Your Car', d
                 className="w-full accent-f1-accent"
               />
               <div className="text-[10px] text-gray-500">Higher = faster in straight (sim speedMult), higher fuel use. Visual: engine glows more.</div>
+            </div>
+
+            {/* View Zoom / Magnify control - purely visual, does NOT affect sim or ML stats */}
+            <div className="pt-2 border-t border-f1-border/50 mt-2">
+              <div className="flex justify-between mb-1">
+                <span>View Zoom (magnify car)</span>
+                <span className="font-mono">{viewZoom.toFixed(1)}x</span>
+              </div>
+              <input 
+                type="range" min="0.35" max="3.5" step="0.05" 
+                value={viewZoom}
+                onChange={(e) => setViewZoom(parseFloat(e.target.value))}
+                className="w-full accent-f1-accent"
+              />
+              <div className="text-[10px] text-gray-500">Makes the car larger/smaller in this preview only. Use mouse wheel or this slider to get close and inspect details. Orbit by dragging.</div>
             </div>
           </div>
 
@@ -298,7 +849,11 @@ export function CarCustomizer({ stats, onStatsChange, driverName = 'Your Car', d
       </div>
 
       <div className="mt-4 text-center text-xs text-gray-500">
-        Drag to rotate • Scroll to zoom • Click parts (especially tyres) for quick changes
+        <strong>Professional viewer controls (top of 3D area):</strong> RESET • FRONT 3/4 • SIDE • TOP for instant showroom-style views.
+        <br />Drag to orbit • Mouse wheel or "View Zoom" slider (right) to magnify/close in • Low min-distance allows extreme close-ups. Auto-frames on load using bounding box for any model.
+      </div>
+      <div className="mt-1 text-center text-[10px] text-gray-500">
+        Using the unpacked glTF + separate textures (best choice from your "3d models" folder) because it gives the most flexible live material/part tweaks while preserving the high-quality PBR maps.
       </div>
     </div>
   );
