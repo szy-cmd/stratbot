@@ -13,7 +13,7 @@ import {
  * Real-time telemetry charts for a single tracked driver.
  * Three graphs: Speed (km/h), Tire Degradation (%), Fuel Remaining (kg).
  */
-export function TelemetryCharts({ telemetryHistory, trackedDriverId, drivers, onChangeDriver }) {
+export const TelemetryCharts = React.memo(function TelemetryCharts({ telemetryHistory, trackedDriverId, drivers, onChangeDriver }) {
   const { speed, tireWear, fuel } = telemetryHistory;
 
   return (
@@ -170,4 +170,4 @@ export function TelemetryCharts({ telemetryHistory, trackedDriverId, drivers, on
       </div>
     </div>
   );
-}
+});

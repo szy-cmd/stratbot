@@ -21,7 +21,7 @@ const WEATHER_EFFECTS = {
  * Post-Race Telemetry Dashboard — shown after race completes or endSimulation.
  * Displays: session info, final standings, comparative telemetry graphs, stats, highlights.
  */
-export function PostRaceSummary({ drivers, peakSpeed, highlightsLog, telemetryHistory, raceConfig, onReset }) {
+export function PostRaceSummary({ drivers, peakSpeed, highlightsLog, telemetryHistory, raceConfig, onReset, mlPredictions = [] }) {
   const avgTireWear = drivers.length
     ? drivers.reduce((sum, d) => sum + d.tireWear, 0) / drivers.length
     : 0;
@@ -185,6 +185,70 @@ export function PostRaceSummary({ drivers, peakSpeed, highlightsLog, telemetryHi
         ) : (
           <p className="text-sm text-gray-500 text-center py-2">No decisions were recorded during this race.</p>
         )}
+      </div>
+
+      {/* NEW: ML Model Comparison & Analysis (the reason for the tool) */}
+      <div className="rounded-lg border border-f1-accent/60 bg-f1-panel p-4 animate-fade-in-up stagger-6">
+        <div className="mb-3 font-display text-xs font-semibold uppercase tracking-wider text-f1-accent">
+          AI Model Results & Comparison
+        </div>
+
+        {/* Variant & Conditions */}
+        <div className="mb-4 text-sm text-gray-300">
+          {mlPredictions?.length > 0 ? (
+            <>
+              Model variant used: <span className="font-semibold text-white">{mlPredictions[0]?.variant || 'base'}</span>
+              {' · '} Weather: <span className="font-semibold">{mlPredictions[0]?.weather || raceConfig?.weather || 'clear'}</span>
+              {' · '} Predictions captured: {mlPredictions.length}
+            </>
+          ) : (
+            'No ML predictions were recorded during this race (start the backend API next time to experiment with live LapDelta).'
+          )}
+        </div>
+
+        {/* Captured Predictions Table */}
+        {mlPredictions?.length > 0 && (
+          <div className="mb-4 overflow-x-auto">
+            <div className="mb-1 text-[10px] uppercase tracking-wider text-gray-400">Live LapDelta Predictions (from selected variant)</div>
+            <table className="w-full min-w-[520px] text-left text-xs">
+              <thead>
+                <tr className="border-b border-f1-border text-[10px] uppercase text-gray-500">
+                  <th className="py-1 pr-2">Lap</th>
+                  <th className="py-1">Variant</th>
+                  <th className="py-1">Weather</th>
+                  <th className="py-1 text-right font-mono">Pred Δ (s)</th>
+                  <th className="py-1">Interpretation</th>
+                  <th className="py-1 text-right">Conf</th>
+                </tr>
+              </thead>
+              <tbody className="text-gray-300">
+                {mlPredictions.slice(-8).map((p, i) => (
+                  <tr key={i} className="border-b border-f1-border/60 hover:bg-white/5">
+                    <td className="py-1 pr-2 font-mono">{p.lap ?? '?'}</td>
+                    <td className="py-1">{p.variant || 'base'}</td>
+                    <td className="py-1">{p.weather_label || p.weather || '-'}</td>
+                    <td className="py-1 text-right font-mono text-emerald-400">
+                      {p.lap_delta_seconds > 0 ? '+' : ''}{p.lap_delta_seconds}
+                    </td>
+                    <td className="py-1 text-[11px] truncate max-w-[220px]">{p.interpretation}</td>
+                    <td className="py-1 text-right font-mono">{p.confidence_pct}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="mt-1 text-[9px] text-gray-500">Last 8 shown. Lower |Δ| = closer to race-median pace.</p>
+          </div>
+        )}
+
+        {/* Weather & Model Impact Note (ties to our trained experiments) */}
+        <div className="rounded border border-f1-border/60 bg-black/20 p-3 text-xs text-gray-400">
+          <span className="text-white font-medium">Weather in our models:</span> The production "base" model uses 11 features without weather. The "weather" variant reflects our experiment models (LGBM-weather, XGBoost-w-weather, RF-w-weather) trained on the same parquet data + AirTemp_Avg, TrackTemp_Avg, Humidity, Wind, Rainfall from the pipeline. Weather affects real outcomes (see sim physics) and was important in several of our trained models (dashboards in docs/evaluation/graphs).
+        </div>
+
+        {/* Simple Benchmark Reminder */}
+        <div className="mt-3 text-[10px] text-gray-500">
+          Benchmark (from training on 2025 holdout): LGBM base 0.9683s MAE ★ | Weather variants ~0.95s in experiments | RF 1.051s
+        </div>
       </div>
 
       {/* New Race Button */}

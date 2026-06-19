@@ -200,6 +200,8 @@ export function useRaceEngine() {
   });
   const [highlightsLog, setHighlightsLog] = useState([]);
   const [raceFeed, setRaceFeed] = useState([]);
+  /* ML predictions captured during race for post-race analysis & comparison (variant + weather aware) */
+  const [mlPredictions, setMlPredictions] = useState([]);
   const [trackedDriverId, setTrackedDriverIdState] = useState(DEFAULT_CONFIG.trackedDriver);
   const trackedIdRef = useRef(DEFAULT_CONFIG.trackedDriver);
   const [fastForward, setFastForward] = useState(false);
@@ -420,6 +422,7 @@ export function useRaceEngine() {
     setTelemetryHistory({ speed: [], tireWear: [{ lap: 1, wear: 100 }], fuel: [{ lap: 1, fuel: INITIAL_FUEL_KG }] });
     setHighlightsLog([]);
     setRaceFeed([]);
+    setMlPredictions([]);
     setFastForward(false);
     setPaused(false);
     setStarted(true);
@@ -431,11 +434,18 @@ export function useRaceEngine() {
     setRaceFinished(false);
     setDecisionIndex(-1);
     setSlowing(false);
+    setMlPredictions([]);
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
   }, []);
 
   const addHighlight = useCallback((text) => {
     setHighlightsLog((prev) => [...prev, { time: Date.now(), text }]);
+  }, []);
+
+  /** Record a live ML prediction (called from App/useStratBotModel during racing) for post-race comparison */
+  const recordPrediction = useCallback((pred) => {
+    if (!pred) return;
+    setMlPredictions((prev) => [...prev.slice(-50), { ...pred, lap: pred.lap || (driversRef.current?.[0]?.lap ?? 0), ts: Date.now() }]);
   }, []);
 
   return {
@@ -461,5 +471,7 @@ export function useRaceEngine() {
     fastForward,
     toggleFastForward,
     totalLaps: totalLapsRef.current,
+    mlPredictions,
+    recordPrediction,
   };
 }

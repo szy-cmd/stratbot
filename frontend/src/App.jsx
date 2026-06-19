@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useSimulation } from './hooks/useSimulation';
 import { useRaceEngine } from './engine/RaceEngine';
 import { TURNS } from './data/mockRaceState';
@@ -31,6 +31,18 @@ function App() {
     raceConfig: race.raceConfig,
     enabled: phase === PHASE.RACING && !race.raceFinished,
   });
+
+  // Persist live predictions for post-race ML comparison / analysis
+  useEffect(() => {
+    if (phase === PHASE.RACING && stratBot.prediction && race.recordPrediction) {
+      race.recordPrediction({
+        ...stratBot.prediction,
+        lap: trackedDriver?.lap,
+        variant: race.raceConfig?.modelVariant || 'base',
+        weather: race.raceConfig?.weather,
+      });
+    }
+  }, [phase, stratBot.prediction, trackedDriver?.lap, race.raceConfig, race.recordPrediction]);
 
   /* ── Phase transitions ── */
   const onBootComplete = useCallback(() => setPhase(PHASE.SETUP), []);
@@ -88,6 +100,7 @@ function App() {
             telemetryHistory={race.telemetryHistory}
             raceConfig={race.raceConfig}
             onReset={onNewRace}
+            mlPredictions={race.mlPredictions}
           />
         </main>
       </div>

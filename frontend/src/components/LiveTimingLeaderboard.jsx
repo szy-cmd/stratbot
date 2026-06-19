@@ -1,11 +1,40 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 /**
  * Live timing leaderboard driven by RaceEngine (position, gap, interval, lapTime, delta).
- * Dark F1 broadcast style.
+ * Adds small live fluctuations for "broadcast" feel (wired from useLiveTimingFluctuation logic).
+ * Reduces perceived full-page refresh/glitch from engine ticks.
  */
-export function LiveTimingLeaderboard({ leaderboard }) {
-  if (!leaderboard?.length) return null;
+export const LiveTimingLeaderboard = React.memo(function LiveTimingLeaderboard({ leaderboard }) {
+  const [displayRows, setDisplayRows] = useState(leaderboard || []);
+
+  // Internal live fluctuation (small wiggles on gaps etc, no full re-sort)
+  useEffect(() => {
+    if (!leaderboard?.length) return;
+    setDisplayRows(leaderboard.map(r => ({ ...r })));
+    const interval = setInterval(() => {
+      setDisplayRows((prev) =>
+        (leaderboard || prev).map((row, i) => {
+          if (i === 0) return row;
+          const wiggle = (Math.random() - 0.5) * 0.035;
+          const parse = (s) => (typeof s === 'string' && s !== '—' ? parseFloat(s) : 0);
+          const gapVal = parse(row.gap);
+          const intervalVal = parse(row.interval);
+          const lastVal = parse(row.lapTime ?? row.lastLap);
+          return {
+            ...row,
+            gap: gapVal ? `+${Math.max(0, gapVal + wiggle).toFixed(2)}s` : row.gap,
+            interval: intervalVal ? `+${Math.max(0, intervalVal + wiggle * 0.5).toFixed(2)}s` : row.interval,
+            lapTime: lastVal ? (lastVal + wiggle * 0.15).toFixed(2) : row.lapTime,
+          };
+        })
+      );
+    }, 2100 + Math.random() * 900);
+    return () => clearInterval(interval);
+  }, [leaderboard?.length, leaderboard]); // re-sync base on engine updates but fluctuate between
+
+  const rows = displayRows.length ? displayRows : (leaderboard || []);
+  if (!rows?.length) return null;
 
   return (
     <div className="overflow-hidden rounded-lg border border-f1-border bg-f1-panel">
@@ -25,7 +54,7 @@ export function LiveTimingLeaderboard({ leaderboard }) {
             </tr>
           </thead>
           <tbody>
-            {leaderboard.map((row) => (
+            {rows.map((row) => (
               <tr
                 key={row.id}
                 className="dashboard-transition border-b border-f1-border/80 hover:bg-white/5"
@@ -60,4 +89,4 @@ export function LiveTimingLeaderboard({ leaderboard }) {
       </div>
     </div>
   );
-}
+});

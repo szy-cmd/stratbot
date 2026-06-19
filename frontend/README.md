@@ -6,13 +6,13 @@ The ML insights panel is additive (polls the Flask API during races) and does no
 
 ## Features
 
-- **Turn-based simulation**: Lap-based decision points (TURNS) with 2–4 strategic branches, outcomes, and probabilities
+- **Turn-based simulation**: Lap-based decision points (TURNS) with 2–4 strategic branches, outcomes, and probabilities. Configure weather, race length, starting compound, and AI model variant (base LGBM, weather-aware from our experiments, RF) in setup for real experimentation.
 - **SVG track map** (TrackMap + CarMarkers): Animated cars, turn navigation on simplified circuits (Bahrain, Monaco etc.)
 - **Live timing leaderboard**: Positions + fluctuating gaps for “live” feel
 - **TelemetryCharts**: Speed, tyre, fuel etc. (Recharts)
 - **StrategyEnginePanel**: Branch probabilities, confidence, risk
-- **ModelInsightsPanel** (new): Live production ML (LightGBM LapDelta + full benchmark table). Polls `/api/predict/lap-delta` every ~8s. Shows interpretation + confidence. Backend must be running.
-- **PostRaceSummary**, RaceFeed, PreRaceSetup (weather/race type/laps), BootSequence
+- **ModelInsightsPanel** (new): Live ML with selectable variant (base vs weather-aware using our trained experiment models that include weather data from pipeline). Polls `/api/predict/lap-delta`. Shows variant, weather considered, live delta + interpretation + confidence. Predictions persisted for post-race model comparison tables (actual vs predicted, variant used). Backend must be running for full experiment mode.
+- **PostRaceSummary** (enhanced): Final classification, telemetry graphs, strategy log + full ML Model Results section with captured predictions table, variant/weather used, benchmark reminder, and comparison to our trained models (including weather experiments).
 - Dark F1 broadcast-style theme (Tailwind + custom F1 colors), smooth transitions, phases: BOOT → SETUP → RACING → POST_RACE
 - Full backend integration: Vite proxy to Flask :5000 for live predictions during simulation
 

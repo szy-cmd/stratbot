@@ -4,7 +4,7 @@ import React from 'react';
  * Live ML insights from the StratBot backend.
  * Additive panel — does not modify the race simulation engine.
  */
-export function ModelInsightsPanel({ modelInfo, prediction, loading, error, apiOnline, onRefresh }) {
+export const ModelInsightsPanel = React.memo(function ModelInsightsPanel({ modelInfo, prediction, loading, error, apiOnline, onRefresh }) {
   const benchmark = modelInfo?.benchmark || {};
   const entries = Object.entries(benchmark).sort((a, b) => a[1].mae - b[1].mae);
   const winner = modelInfo?.model_name;
@@ -75,6 +75,10 @@ export function ModelInsightsPanel({ modelInfo, prediction, loading, error, apiO
             {prediction.lap_delta_seconds}s
           </div>
           <div className="mt-1 text-sm text-gray-300">{prediction.interpretation}</div>
+          <div className="mt-1 text-[10px] text-gray-400">
+            {prediction.variant && prediction.variant !== 'base' ? `${prediction.variant} variant · ` : ''}
+            {prediction.weather_considered ? `Weather: ${prediction.weather_label || prediction.weather} (considered)` : `Weather: ${prediction.weather || 'clear'} (base model)`}
+          </div>
           <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
             <span>Model confidence: {prediction.confidence_pct}%</span>
             <button
@@ -85,6 +89,9 @@ export function ModelInsightsPanel({ modelInfo, prediction, loading, error, apiO
               Refresh
             </button>
           </div>
+          {prediction.variant_note && (
+            <div className="mt-1 text-[9px] text-gray-500 italic">{prediction.variant_note}</div>
+          )}
         </div>
       )}
 
@@ -99,4 +106,4 @@ export function ModelInsightsPanel({ modelInfo, prediction, loading, error, apiO
       )}
     </div>
   );
-}
+});

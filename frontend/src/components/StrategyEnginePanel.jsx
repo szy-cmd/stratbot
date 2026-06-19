@@ -5,7 +5,7 @@ import React from 'react';
  * Shows: confidence %, mini bar chart of branch probabilities, confidence meter, risk level.
  * All values from current turn (or random for demo).
  */
-export function StrategyEnginePanel({ turn }) {
+export const StrategyEnginePanel = React.memo(function StrategyEnginePanel({ turn }) {
   const confidence = turn?.confidence ?? 87;
   const riskLevel = turn?.riskLevel ?? 'medium';
   const branches = turn?.branches ?? [];
@@ -85,4 +85,4 @@ export function StrategyEnginePanel({ turn }) {
       </div>
     </div>
   );
-}
+});

@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { TURNS, INITIAL_LEADERBOARD } from '../data/mockRaceState';
+import { TURNS } from '../data/mockRaceState';
 
 /**
  * Turn-based simulation state (chess-like).
@@ -8,14 +8,6 @@ import { TURNS, INITIAL_LEADERBOARD } from '../data/mockRaceState';
 export function useSimulation() {
   const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
   const [selectedBranchIds, setSelectedBranchIds] = useState({});
-  const [leaderboard, setLeaderboard] = useState(() =>
-    INITIAL_LEADERBOARD.map((row) => ({
-      ...row,
-      gap: row.gap,
-      interval: row.interval,
-      lastLap: row.lastLap,
-    }))
-  );
 
   const currentTurn = TURNS[currentTurnIndex];
   const isLastTurn = currentTurnIndex >= TURNS.length - 1;
@@ -39,12 +31,6 @@ export function useSimulation() {
   const resetSimulation = useCallback(() => {
     setCurrentTurnIndex(0);
     setSelectedBranchIds({});
-    setLeaderboard(INITIAL_LEADERBOARD.map((row) => ({
-      ...row,
-      gap: row.gap,
-      interval: row.interval,
-      lastLap: row.lastLap,
-    })));
   }, []);
 
   return {
@@ -59,7 +45,5 @@ export function useSimulation() {
     hasPrevTurn,
     isLastTurn,
     resetSimulation,
-    leaderboard,
-    setLeaderboard,
   };
 }

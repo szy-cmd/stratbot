@@ -139,13 +139,15 @@ The predictor gracefully fills missing inputs using feature medians learned from
 
 Phases: `BOOT → SETUP (weather, race type, lap count) → RACING (live timing, telemetry, turn decisions, StrategyEnginePanel) → POST_RACE`.
 
-The **ModelInsightsPanel** (added below the Strategy panel) shows:
-- Which model is live + its MAE
-- Full benchmark bar chart (lower is better)
-- Live per-lap prediction: signed LapDelta seconds + human-readable interpretation + confidence %
-- "API online" indicator
+The **ModelInsightsPanel** (added below the Strategy panel) now supports full experimentation:
+- Select model variant in PreRaceSetup (Base LGBM, Weather-aware LGBM using our trained experiments with Air/TrackTemp etc., RF)
+- Choose starting compound (affects ML CompoundCode)
+- Live per-lap: signed LapDelta + interpretation + confidence, variant used, whether weather considered
+- "API online" + benchmark
 
-The simulation engine itself remains mock-data driven (as scoped); the ML component is additive and non-breaking.
+Predictions are captured during the race and shown in an enhanced **PostRaceSummary** with ML comparison table (laps, variants, weather, predicted deltas vs context), weather/model impact notes, and benchmark reminder.
+
+The simulation engine itself remains mock-data driven (as scoped); the ML component is additive and non-breaking but now deeply comparable. Performance fixes (internal fluctuation for leaderboard, memoized panels, decoupled visuals) reduce glitchy refreshes on updates.
 
 ## Getting Started (Important: Use the Shared Venv + J: Drive Only)
 

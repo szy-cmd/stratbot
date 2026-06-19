@@ -52,11 +52,26 @@ const RACE_TYPE_OPTIONS = [
   },
 ];
 
+const COMPOUND_OPTIONS = [
+  { id: 'soft', label: 'Soft', desc: 'Fast but high degradation', color: 'text-f1-red' },
+  { id: 'medium', label: 'Medium', desc: 'Balanced — default choice', color: 'text-amber-400' },
+  { id: 'hard', label: 'Hard', desc: 'Durable for long stints', color: 'text-gray-400' },
+  { id: 'intermediate', label: 'Inter', desc: 'Wet but not full rain', color: 'text-blue-400' },
+];
+
+const MODEL_VARIANT_OPTIONS = [
+  { id: 'base', label: 'Base (LGBM)', desc: 'Production 11-feature model (fast, no weather)', mae: '0.9683s' },
+  { id: 'weather', label: 'Weather-aware (LGBM)', desc: 'Uses Air/Track temp, humidity, wind, rain from our pipeline experiments', mae: '~0.95s' },
+  { id: 'rf', label: 'Random Forest', desc: 'Alternative benchmark model for comparison', mae: '1.051s' },
+];
+
 export function PreRaceSetup({ onStart }) {
   const [weather, setWeather] = useState('clear');
   const [raceType, setRaceType] = useState('standard');
   const [trackedDriver, setTrackedDriver] = useState('VER');
   const [trackId, setTrackId] = useState('buddhism-svgfind-com');
+  const [compound, setCompound] = useState('medium');
+  const [modelVariant, setModelVariant] = useState('base'); // base | weather | rf (for experimentation with our trained models)
 
   const handleStart = () => {
     const raceConfig = RACE_TYPE_OPTIONS.find((r) => r.id === raceType);
@@ -66,6 +81,8 @@ export function PreRaceSetup({ onStart }) {
       totalLaps: raceConfig?.laps ?? 57,
       trackedDriver,
       trackId,
+      compound,
+      modelVariant,
     });
   };
 
@@ -168,6 +185,47 @@ export function PreRaceSetup({ onStart }) {
           </div>
           <p className="mt-2 text-[10px] text-gray-600 text-center">
             You will make strategic decisions for this driver. You can still view other drivers' telemetry during the race.
+          </p>
+        </Section>
+
+        {/* Starting Compound (affects ML LapDelta prediction directly via CompoundCode) */}
+        <Section title="Starting Compound" index={5}>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {COMPOUND_OPTIONS.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setCompound(c.id)}
+                className={`setup-card text-center ${compound === c.id ? 'selected' : ''}`}
+              >
+                <div className={`font-display text-sm font-bold tracking-wider ${c.color}`}>{c.label}</div>
+                <div className="mt-1 text-[10px] text-gray-500 leading-relaxed">{c.desc}</div>
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-[10px] text-gray-600 text-center">
+            Directly influences the ML prediction (CompoundCode feature). Choose wisely for your strategy.
+          </p>
+        </Section>
+
+        {/* AI Model Variant — experiment with models we actually trained (including weather variants) */}
+        <Section title="AI Model / Variant" index={6}>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {MODEL_VARIANT_OPTIONS.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => setModelVariant(v.id)}
+                className={`setup-card text-left p-3 ${modelVariant === v.id ? 'selected' : ''}`}
+              >
+                <div className="font-display text-sm font-bold tracking-wider text-white">{v.label}</div>
+                <div className="mt-1 text-[10px] text-gray-400">{v.desc}</div>
+                <div className="mt-1 font-mono text-[10px] text-f1-accent">MAE ~{v.mae}</div>
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-[10px] text-gray-600 text-center">
+            Select which trained model powers the live LapDelta predictions. Weather-aware uses data from our pipeline experiments.
           </p>
         </Section>
 

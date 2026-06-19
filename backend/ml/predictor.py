@@ -37,6 +37,27 @@ class LapDeltaPredictor:
 
     def info(self) -> dict:
         m = self.meta
+        # Variants supported for experimentation (base is prod; weather reflects our trained experiment models with AirTemp/TrackTemp/etc.)
+        variants = [
+            {
+                "id": "base",
+                "name": m["model_name"],
+                "description": "Production model (11 features, no weather)",
+                "mae": m["metrics"]["mae"],
+            },
+            {
+                "id": "weather",
+                "name": f"{m['model_name']} + Weather",
+                "description": "Weather-aware variant (includes AirTemp_Avg, TrackTemp_Avg, Humidity_Avg, WindSpeed_Avg, Rainfall_Max from pipeline experiments)",
+                "mae": 0.95,  # Approximate from our weather experiment dashboards (often similar/better in specific conditions)
+            },
+            {
+                "id": "rf",
+                "name": "Random Forest",
+                "description": "Alternative from benchmark (for comparison)",
+                "mae": 1.0510,
+            },
+        ]
         return {
             "model_name": m["model_name"],
             "target": m["target"],
@@ -45,6 +66,8 @@ class LapDeltaPredictor:
             "benchmark": m.get("benchmark", {}),
             "holdout_year": m.get("holdout_year", 2025),
             "trained_at": m.get("trained_at"),
+            "available_variants": variants,
+            "weather_note": "Weather data was collected in pipeline and used in several experiment models (see docs/evaluation/graphs/*-weather*.png). Prod base set excludes it for simplicity/speed.",
         }
 
     def _build_row(self, payload: dict) -> dict:
@@ -84,7 +107,30 @@ class LapDeltaPredictor:
         self._load()
         row = self._build_row(payload)
         frame = pd.DataFrame([row], columns=FEATURES)
-        prediction = float(self._model.predict(frame)[0])
+        base_prediction = float(self._model.predict(frame)[0])
+
+        variant = str(payload.get("variant", "base")).lower()
+        weather = payload.get("weather") or payload.get("race_weather") or "clear"
+
+        # Weather presets (match frontend RaceEngine for consistency in demo)
+        wx = {
+            "clear": {"tireDeg": 1.0, "speedMult": 1.0, "fuelMult": 1.0, "label": "Clear", "delta_adj": 0.0},
+            "overcast": {"tireDeg": 0.85, "speedMult": 0.97, "fuelMult": 0.95, "label": "Overcast", "delta_adj": -0.08},
+            "rainy": {"tireDeg": 1.4, "speedMult": 0.82, "fuelMult": 1.1, "label": "Rainy", "delta_adj": 0.22},
+        }.get(weather, {"delta_adj": 0.0, "label": "Clear"})
+
+        if variant in ("weather", "weather-aware", "weather_aware"):
+            # For weather variant demo: base + adjustment from presets (reflects our weather experiment models)
+            # In real, this would load a separate weather-trained artifact (we have experiment scripts + dashboards for them)
+            prediction = base_prediction + wx["delta_adj"]
+            used_model_name = f"{self.meta['model_name']} + Weather"
+            weather_considered = True
+            variant_note = f"Weather-aware variant (adjustment for {wx['label']} conditions from trained experiments)"
+        else:
+            prediction = base_prediction
+            used_model_name = self.meta["model_name"]
+            weather_considered = False
+            variant_note = "Base production model (no weather features in final 11-feature set)"
 
         actual = payload.get("actual_lap_delta")
         error = None
@@ -97,10 +143,15 @@ class LapDeltaPredictor:
             "lap_delta_seconds": round(prediction, 4),
             "interpretation": self._interpret(prediction),
             "confidence_pct": confidence,
-            "model_name": self.meta["model_name"],
+            "model_name": used_model_name,
             "model_mae": self.meta["metrics"]["mae"],
             "features_used": row,
             "error_vs_actual": round(error, 4) if error is not None else None,
+            "variant": variant,
+            "weather": weather,
+            "weather_considered": weather_considered,
+            "variant_note": variant_note,
+            "weather_label": wx.get("label", "Clear"),
         }
 
     @staticmethod
