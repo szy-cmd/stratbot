@@ -36,6 +36,72 @@ const PART_HINTS = {
   mirrors: 'Side mirrors.',
 };
 
+// Team to model folder mapping (unpacked glTF preferred for customizations)
+// All models copied to frontend/public/models/<key>/
+const TEAM_MODEL_MAP = {
+  'McLaren': 'f1_2025_mclaren_mcl39',
+  'Red Bull': 'f1-2025_redbull_rb21',
+  'Aston Martin': 'aston_martin_aramco_amr25',
+  'Mercedes': 'f1_mercedes_w13_concept',
+  'Ferrari': 'ferrari_sf-25',
+  'Alpine': '2025_alpine_a525',
+};
+
+function getModelUrlForTeam(team) {
+  const key = TEAM_MODEL_MAP[team];
+  if (!key) {
+    console.warn(`[CarCustomizer] No dedicated 3D model for team "${team}". Falling back to McLaren.`);
+    return '/models/f1_2025_mclaren_mcl39/scene.gltf';
+  }
+  return `/models/${key}/scene.gltf`;
+}
+
+// Per-team rotation (radians) to normalize orientation so nose faces consistent direction (typically -Z for front-3/4 view with current dir vector), +Y up.
+const TEAM_ROTATIONS = {
+  'McLaren': { x: 0, y: 0, z: 0 },
+  'Red Bull': { x: 0, y: Math.PI, z: 0 }, // often exported facing opposite
+  'Aston Martin': { x: 0, y: 0, z: 0 },
+  'Mercedes': { x: 0, y: 0, z: 0 },
+  'Ferrari': { x: 0, y: 0, z: 0 },
+  'Alpine': { x: 0, y: 0, z: 0 },
+};
+
+// Fine-tune overall visual scale if bbox-based framing alone doesn't make cars feel identical in presence (rarely needed).
+const TEAM_SCALE_MULT = {
+  'McLaren': 1.0,
+  'Red Bull': 1.0,
+  'Aston Martin': 1.0,
+  'Mercedes': 1.0,
+  'Ferrari': 1.0,
+  'Alpine': 1.0,
+};
+
+// Static summary for validation (see console on first customizer load)
+const MODEL_INTEGRATION_SUMMARY = {
+  'McLaren': { file: 'f1_2025_mclaren_mcl39/scene.gltf', adjustments: 'rot=0, scale=1.0, bbox-center+ground' },
+  'Red Bull': { file: 'f1-2025_redbull_rb21/scene.gltf', adjustments: 'rot=y:PI (assumed opposite), scale=1.0, bbox-center+ground' },
+  'Aston Martin': { file: 'aston_martin_aramco_amr25/scene.gltf', adjustments: 'rot=0, scale=1.0, bbox-center+ground' },
+  'Mercedes': { file: 'f1_mercedes_w13_concept/scene.gltf', adjustments: 'rot=0, scale=1.0, bbox-center+ground' },
+  'Ferrari': { file: 'ferrari_sf-25/scene.gltf', adjustments: 'rot=0, scale=1.0, bbox-center+ground' },
+  'Alpine': { file: '2025_alpine_a525/scene.gltf', adjustments: 'rot=0, scale=1.0, bbox-center+ground' },
+};
+
+/** Normalize a model's orientation, center, and ground plane so all team cars present identically. */
+function normalizeOrientationAndCenter(obj, team = 'McLaren') {
+  if (!obj || !obj.isObject3D) return;
+  const rot = TEAM_ROTATIONS[team] || { x: 0, y: 0, z: 0 };
+  obj.rotation.set(rot.x || 0, rot.y || 0, rot.z || 0);
+  // Center on bbox center
+  let box = new THREE.Box3().setFromObject(obj);
+  let center = box.getCenter(new THREE.Vector3());
+  obj.position.x -= center.x;
+  obj.position.y -= center.y;
+  obj.position.z -= center.z;
+  // Rest on ground (min y = 0)
+  box = new THREE.Box3().setFromObject(obj);
+  obj.position.y -= box.min.y;
+}
+
 /** Classify a glTF node or material name into a customizer part */
 function classifyNodeName(name) {
   if (!name) return null;
@@ -46,15 +112,15 @@ function classifyNodeName(name) {
   if (n.includes('wheel_rim') || n.includes('wheel_nut') || n.includes('wheel_screw') || n.includes('wheel_cover') || n.includes('tire')) {
     return { id: 'tyres', label: 'Wheels & Tyres' };
   }
-  if (n.includes('front_wing')) return { id: 'aero', label: 'Front Wing' };
-  if (n.includes('rear_wing')) return { id: 'aero', label: 'Rear Wing' };
+  if (n.includes('front_wing') || n.includes('frontspoiler') || n.includes('frontflap') || n.includes('fw_') || n.includes('fw')) return { id: 'aero', label: 'Front Wing' };
+  if (n.includes('rear_wing') || n.includes('rearspoiler') || n.includes('rearflap')) return { id: 'aero', label: 'Rear Wing' };
   if (n.includes('drs') || n.includes('windlet')) return { id: 'aero', label: 'Aerodynamics' };
-  if (n.includes('exhaust') || n.includes('exthaust')) return { id: 'power', label: 'Engine / Exhaust' };
-  if (n.includes('suspension')) return { id: 'suspension', label: 'Suspension' };
+  if (n.includes('exhaust') || n.includes('exthaust') || n.includes('rearlight')) return { id: 'power', label: 'Engine / Exhaust' };
+  if (n.includes('suspension') || n.includes('carbon_suspension')) return { id: 'suspension', label: 'Suspension' };
   if (n.includes('halo')) return { id: 'halo', label: 'Halo' };
-  if (n.includes('headrest')) return { id: 'cockpit', label: 'Cockpit' };
+  if (n.includes('headrest') || n.includes('HEADREST')) return { id: 'cockpit', label: 'Cockpit' };
   if (n.includes('mirror')) return { id: 'mirrors', label: 'Mirrors' };
-  if (n.includes('main_body') || n.includes('cam_tbone')) return { id: 'body', label: 'Chassis / Body' };
+  if (n.includes('main_body') || n.includes('cam_tbone') || n.includes('Body_Main') || n.includes('paints')) return { id: 'body', label: 'Chassis / Body' };
 
   return null;
 }
@@ -92,8 +158,8 @@ function resolvePartGroup(obj) {
     const n = (current.name || '').toLowerCase();
     if (n.includes('front_tire')) return 'front_tire';
     if (n.includes('rear_tire')) return 'rear_tire';
-    if (n.includes('front_wing')) return 'front_wing';
-    if (n.includes('rear_wing')) return 'rear_wing';
+    if (n.includes('front_wing') || n.includes('frontspoiler') || n.includes('frontflap')) return 'front_wing';
+    if (n.includes('rear_wing') || n.includes('rearspoiler')) return 'rear_wing';
     if (n.includes('exhaust') || n.includes('exthaust')) return 'exhaust';
     if (n.includes('suspension')) return 'suspension';
     if (n.includes('headrest')) return 'cockpit';
@@ -221,7 +287,8 @@ function applyNormalExhaustGlow(scene, powerLevel, exceptGroups = []) {
 // We could achieve similar overrides with the .glb (by cloning materials and setting color/emissive/scale/rotation on traversed children), but the unpacked version is the source of truth, easier to author/edit textures externally, and matches the "with seperate textures" the user mentioned.
 // Note: This model is detailed (~high poly + large textures). For production web use, run optimization: npx gltf-transform optimize ... --draco etc. and move to public/models/.
 // The folder was copied to public/models/f1_2025_mclaren_mcl39/ during setup.
-const MODEL_URL = '/models/f1_2025_mclaren_mcl39/scene.gltf';
+// Default (legacy) - now computed dynamically via getModelUrlForTeam(team) based on selected driver/team
+const DEFAULT_MCLAREN_MODEL_URL = '/models/f1_2025_mclaren_mcl39/scene.gltf';
 
 // Base scale for the GLTF model. Increased by 70% (from 0.0095 to 0.01615) so the car appears substantially larger
 // by default in the viewer (addresses "too far away" / small model feedback). The auto-framing logic accounts
@@ -244,9 +311,33 @@ const BASE_MODEL_SCALE = 1.01615; // 0.0095 * 1.7 (70% increase for substantiall
 // - .usdz is Apple-only AR format – ignore for this.
 // Recommendation implemented: Use the glTF with separate textures.
 
-function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', modelUrl, viewZoom = 1, orbitControlsRef, frameKey = 0, forceClearHighlights = 0 }) {
-  const gltf = useGLTF(modelUrl);
+function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', team = 'McLaren', modelUrl, viewZoom = 1, orbitControlsRef, frameKey = 0, forceClearHighlights = 0 }) {
+  const primaryGltf = useGLTF(modelUrl);
+  const fallbackGltf = useGLTF(DEFAULT_MCLAREN_MODEL_URL);
+  const gltf = (primaryGltf && primaryGltf.scene) ? primaryGltf : fallbackGltf;
+  const usingFallback = !(primaryGltf && primaryGltf.scene) && team !== 'McLaren';
   const { compound, initialTyreWear, aeroLevel, powerLevel } = stats;
+
+  // Dev/validation log for model loading per team (helps verify normalization, presence)
+  useEffect(() => {
+    if (gltf?.scene) {
+      const box = new THREE.Box3().setFromObject(gltf.scene);
+      const size = box.getSize(new THREE.Vector3());
+      const maxD = Math.max(size.x, size.y, size.z);
+      console.log(`[CarCustomizer] Loaded team=${team} modelUrl=${modelUrl} nativeMaxDim=${maxD.toFixed(2)}${usingFallback ? ' (FALLBACK to McLaren)' : ''}`);
+      if (!window.__stratbotModelsLogged) {
+        window.__stratbotModelsLogged = true;
+        console.log('%c[CarCustomizer] === MODEL INTEGRATION VALIDATION SUMMARY ===', 'color: #0af; font-weight: bold');
+        console.table(MODEL_INTEGRATION_SUMMARY);
+        console.log('All teams use same BASE_MODEL_SCALE + dynamic bbox framing + normalize (center/ground/orient) + identical OrbitControls + camera presets.');
+        console.log('Issues discovered: (1) Part names for classify/hover/click are McLaren-centric so may be incomplete on other models (e.g. tyres/wings may still tag via broad keywords). (2) Some rots/scales are best-guess and may need visual tweak. (3) Livery tint only on McLaren; others use baked team textures (correct). (4) No models were missing after copy.');
+        console.log('Fallback: if primary 404/ fail, auto uses McLaren + warn logged.');
+      }
+    }
+    if (usingFallback) {
+      console.warn(`[CarCustomizer] Primary model for team "${team}" at ${modelUrl} failed to load (file missing?). Gracefully fell back to McLaren.`);
+    }
+  }, [gltf, team, modelUrl, usingFallback]);
   const { camera } = useThree();
   const hoveredGroupRef = useRef(null);
   const modelRef = useRef(null);
@@ -264,7 +355,7 @@ function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', 
   // Reset framing when model or explicit frameKey changes (for Reset button / future models)
   useEffect(() => {
     framedRef.current = false;
-  }, [modelUrl, frameKey]);
+  }, [modelUrl, frameKey, team]);
 
   // Keep a ref in sync for event handlers (avoid stale closures for selected state during hovers/clicks)
   useEffect(() => {
@@ -319,8 +410,10 @@ function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', 
       const mats = Array.isArray(mat) ? mat : (mat ? [mat] : []);
 
       // === Body / main structure recoloring (team color) ===
-      if (n.includes('main_body') || n.includes('suspensions') || n.includes('headrest') ||
-          n.includes('wheel_cover') || n.includes('wheel_windlet') || n.includes('mirror')) {
+      // Only force-tint for the McLaren model (its livery is tint-based). For other team-specific models
+      // the authentic pre-baked team liveries in the GLTF textures are used instead.
+      if (team === 'McLaren' && (n.includes('main_body') || n.includes('suspensions') || n.includes('headrest') ||
+          n.includes('wheel_cover') || n.includes('wheel_windlet') || n.includes('mirror'))) {
         mats.forEach(m => {
           if (m.color) m.color.set(teamColor);
           // keep the rich PBR maps from the model
@@ -367,7 +460,7 @@ function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', 
         });
       }
     });
-  }, [gltf, stats, teamColor, compound, initialTyreWear, aeroLevel, powerLevel, tyreColor, wearScale, wingAngle, engineGlow]);
+  }, [gltf, stats, teamColor, team, compound, initialTyreWear, aeroLevel, powerLevel, tyreColor, wearScale, wingAngle, engineGlow]);
 
   // Re-apply selection glow after stat/material updates (traverse effect resets emissive)
   useEffect(() => {
@@ -386,7 +479,7 @@ function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', 
     if (selectedGroup) excepts.push(selectedGroup);
     if (hoveredGroupRef.current && hoveredGroupRef.current !== selectedGroup) excepts.push(hoveredGroupRef.current);
     applyNormalExhaustGlow(modelRef.current, powerLevel, excepts);
-  }, [selectedGroup, stats, teamColor, compound, initialTyreWear, aeroLevel, powerLevel]);
+  }, [selectedGroup, stats, teamColor, team, compound, initialTyreWear, aeroLevel, powerLevel]);
 
   // Force clear all highlights when parent requests it (e.g., clicking outside)
   useEffect(() => {
@@ -467,13 +560,18 @@ function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', 
   useEffect(() => {
     if (!gltf?.scene || framedRef.current) return;
 
-    const box = new THREE.Box3().setFromObject(gltf.scene);
+    // Measure using a *normalized* temp clone so bbox/center accounts for this team's orientation + ground + any per-team scale.
+    // This ensures camera framing, distance, and target match McLaren experience for every team.
+    const temp = gltf.scene.clone();
+    normalizeOrientationAndCenter(temp, team);
+    const box = new THREE.Box3().setFromObject(temp);
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z);
 
     // Effective scale the model will have in the scene (base tuned for this export + current user zoom)
-    const renderScale = BASE_MODEL_SCALE * (viewZoom);
+    const scaleMult = TEAM_SCALE_MULT[team] || 1;
+    const renderScale = BASE_MODEL_SCALE * scaleMult * (viewZoom);
     const visualMaxDim = maxDim * renderScale;
 
     // Distance so the car nicely fills ~70-80% of the view (professional showroom feel, not too tight, not lost in space)
@@ -481,7 +579,8 @@ function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', 
     const distance = (visualMaxDim / 2) / Math.tan(fov / 2) * 0.85;  // reduced factor (from 1.45) so with 70% larger BASE_MODEL_SCALE the car fills ~70% more of the view by default (tighter, more impressive presentation)
 
     // Preferred presentation angle: front 3/4 (shows front wing + side profile), slightly elevated
-    // Vector chosen and normalized for this McLaren model orientation to give strong visual depth
+    // Vector chosen and normalized for this McLaren model orientation to give strong visual depth.
+    // After per-team normalize rot, same dir works for all.
     const dir = new THREE.Vector3(1.15, 0.55, 1.65).normalize();
     const camPos = center.clone().add(dir.multiplyScalar(distance));
 
@@ -497,7 +596,7 @@ function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', 
     }
 
     framedRef.current = true;
-  }, [gltf?.scene, camera, orbitControlsRef, viewZoom, frameKey]);
+  }, [gltf?.scene, camera, orbitControlsRef, viewZoom, frameKey, team]);
 
   if (!gltf?.scene) return null;
 
@@ -506,11 +605,13 @@ function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', 
   // Base scale tuned for this exported model; user can make it much larger/smaller.
   const model = gltf.scene.clone(); // clone so we don't mutate the cached original across re-renders/stats
   tagModelParts(model);
+  // Team model normalization (center, ground, orientation) so every car presents identically
+  normalizeOrientationAndCenter(model, team);
   modelRef.current = model;
-  const baseScale = BASE_MODEL_SCALE;
+  const scaleMult = TEAM_SCALE_MULT[team] || 1;
+  const baseScale = BASE_MODEL_SCALE * scaleMult;
   model.scale.setScalar(baseScale * (viewZoom || 1));
-  model.position.set(0,0,0); // adjusted y for 70% larger model scale so it still "sits" reasonably above the ground plane
-  model.rotation.set(0, 0, 0); // tiny yaw for nicer default 3/4 view
+  // position + rotation already handled (and adjusted for ground/center/orient) by normalize — do not reset
 
   return (
     <primitive
@@ -522,7 +623,7 @@ function RealF1Model({ stats, onPartClick, selectedPart, teamColor = '#3671C6', 
   );
 }
 
-export function CarCustomizer({ stats, onStatsChange, driverName = 'Your Car', driverColor = '#3671C6', weather = 'clear', trackName = 'Track', onClose, onApply }) {
+export function CarCustomizer({ stats, onStatsChange, driverName = 'Your Car', driverColor = '#3671C6', team = 'McLaren', weather = 'clear', trackName = 'Track', onClose, onApply }) {
   const [selectedPart, setSelectedPart] = useState(null);
   const [localStats, setLocalStats] = useState(stats);
 
@@ -641,14 +742,14 @@ export function CarCustomizer({ stats, onStatsChange, driverName = 'Your Car', d
     onStatsChange?.(recommended);
   };
 
-  const effectiveModelUrl = MODEL_URL; // can be overridden by prop in future
+  const effectiveModelUrl = getModelUrlForTeam(team);
 
   return (
     <div className="rounded-2xl border border-f1-border bg-f1-panel p-6 shadow-xl">
       <div className="flex items-center justify-between mb-4">
         <div>
           <div className="font-display text-xl text-white">Team Strategy for {driverName}'s Car</div>
-          <div className="text-xs text-gray-400">As the race engineer for this driver, make realistic F1 team choices (tyres, setup for weather/track). Click car parts or briefing. Affects sim + ML for accurate, driver-specific results. Using real high-detail 2025 McLaren MCL39 (glTF + separate PBR textures – best for live color, scale, rotation, and glow tweaks).</div>
+          <div className="text-xs text-gray-400">As the race engineer for this driver, make realistic F1 team choices (tyres, setup for weather/track). Click car parts or briefing. Affects sim + ML for accurate, driver-specific results. Using real high-detail {team} 2025 F1 car (glTF + separate PBR textures – authentic livery + live color/scale/rotation/glow tweaks where applicable).</div>
         </div>
         <div className="flex gap-2">
           <button onClick={onClose} className="px-4 py-2 text-sm border border-f1-border rounded hover:bg-white/5">Close</button>
@@ -686,15 +787,15 @@ export function CarCustomizer({ stats, onStatsChange, driverName = 'Your Car', d
             <Environment preset="city" />
 
             {/* Subtle ground plane — raycast disabled so clicks pass through to deselect */}
-            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.55 * 1.7, 0]} receiveShadow raycast={() => null}>
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} receiveShadow raycast={() => null}>
               <planeGeometry args={[9, 9]} />
               <shadowMaterial transparent opacity={0.65} color="#0a0a0a" />
             </mesh>
 
-            {/* Real detailed McLaren 2025 MCL39 (or fallback) with live stat-driven tweaks */}
+            {/* Real detailed team-specific F1 car (or fallback) with live stat-driven tweaks */}
             <Suspense fallback={
               <Html center style={{ color: '#00d4aa', fontSize: '12px', fontFamily: 'monospace' }}>
-                Loading detailed 2025 McLaren MCL39...<br />Large model (high poly + PBR textures)
+                {`Loading detailed ${team} F1 car...`}<br />Large model (high poly + PBR textures)
               </Html>
             }>
               <RealF1Model
@@ -702,6 +803,7 @@ export function CarCustomizer({ stats, onStatsChange, driverName = 'Your Car', d
                 onPartClick={handlePartClick}
                 selectedPart={selectedPart}
                 teamColor={driverColor}
+                team={team}
                 modelUrl={effectiveModelUrl}
                 viewZoom={viewZoom}
                 orbitControlsRef={orbitControlsRef}

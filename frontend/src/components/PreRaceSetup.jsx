@@ -251,6 +251,7 @@ export function PreRaceSetup({ onStart }) {
             onStatsChange={setCarStats}
             driverName={DRIVERS.find(d => d.id === trackedDriver)?.name}
             driverColor={DRIVERS.find(d => d.id === trackedDriver)?.color}
+            team={DRIVERS.find(d => d.id === trackedDriver)?.team || 'McLaren'}
             weather={weather}
             trackName={TRACK_OPTIONS.find(t => t.id === trackId)?.name}
             onClose={() => {}}  // no close, always visible in section
