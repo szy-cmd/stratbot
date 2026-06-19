@@ -20,17 +20,16 @@ DHA Suffa University — Final Year Project
 Key interactive features (captured live with Playwright):
 
 **3D Modeler (Car Customizer in Pre-Race Setup)**
-- Full interactive 3D F1 car with live weather-adaptive HDRI backgrounds from user-provided panos, custom lighting, part selection, stats that affect visuals + sim/ML.
+- Full interactive 3D F1 car with live weather-adaptive HDRI backgrounds from user-provided panos (sunny/clear, overcast, rainy), custom lighting per weather, part selection (tyres/aero/power/body), stats that affect visuals + sim/ML. Rainy uses solid dark BG (no pano image) but keeps HDRI for car reflections + boosted lights for visibility.
 
-![3D Modeler - Clear](assets/screenshots/3d-modeler-clear.png)
-![3D Modeler - Rainy (brighter car, dark custom BG, HDRI reflections kept for car only)](assets/screenshots/3d-modeler-rainy.png)
 ![3D Modeler - Overcast](assets/screenshots/3d-modeler-overcast.png)
+![Pre-Race Setup + Controls](assets/screenshots/pre-race-setup.png)
 
-**Pre-Race Setup + Controls**
-![Pre-Race Setup](assets/screenshots/pre-race-setup.png)
+**Post-Race Analysis (ML insights, lap history, strategy comparison)**
+![Post-Race Analysis](assets/screenshots/post-race-analysis.png)
 
-**Boot → Setup Flow**
-![App Boot to Setup](assets/screenshots/app-boot-setup.png)
+**Strategy Engine Panel**
+![Strategy Engine](assets/screenshots/strategy-engine.png)
 
 ---
 
