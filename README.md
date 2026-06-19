@@ -1,7 +1,11 @@
 # StratBot (P80F25)
 
+![StratBot Banner](assets/stratbot-banner.jpg)
+
 **AI-assisted Formula 1 race strategy simulation and analysis platform**  
 DHA Suffa University — Final Year Project
+
+> **Variations:** [Banner v2 (minimal)](assets/stratbot-banner-v2.jpg)
 
 **Team**
 
